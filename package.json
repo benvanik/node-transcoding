@@ -1,6 +1,6 @@
 {
   "name": "transcode",
-  "description": "Transcoding and media streaming handler",
+  "description": "Media transcoding and streaming support",
   "version": "0.0.1",
   "author": "Ben Vanik <ben.vanik@gmail.com>",
   "contributors": [],
@@ -23,7 +23,7 @@
   "scripts": {
   },
   "engines": {
-    "node": ">= 0.5.x"
+    "node": ">= 0.6.x"
   },
   "devDependencies": {}
 }
