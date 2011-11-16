@@ -17,13 +17,12 @@ Coming soon (maybe):
 
     npm install transcode
     node
-    > var transcoder = require('transcode').createTranscoder(
-        'input.flv',
-        'output.mp4', {
-          preset: 'appletv'
-        }).start(function(err, result) {
-          // Done!
-        });
+    > var transcode = require('transcode');
+    > var transcoder = transcode.createTranscoder('input.flv');
+    > transcoder.setProfile(transcode.profiles.APPLE_TV);
+    > transcoder.writeToFile('output.m4v', function(err, result) {
+        // Done!
+      });
 
 ## Installation
 
