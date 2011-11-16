@@ -35,6 +35,26 @@ From source:
     cd ~
     git clone https://benvanik@github.com/benvanik/node-transcode.git
     npm link node-transcode/
+    
+### Dependencies
+
+node-transcode requires the command-line `ffmpeg` tool to run. Make sure
+it's installed and on your path.
+
+#### Mac OS X
+
+The easiest way to get ffmpeg is via [MacPorts](http://macports.org).
+Install it if needed and run the following from the command line:
+
+    sudo port install ffmpeg +gpl +lame +x264 +xvid
+    
+#### FreeBSD
+
+    sudo pkg_add ffmpeg
+
+#### Linux
+
+    sudo apt-get install ffmpeg
 
 ## API
 
