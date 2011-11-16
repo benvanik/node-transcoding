@@ -41,6 +41,14 @@ From source:
 node-transcode requires the command-line `ffmpeg` tool to run. Make sure
 it's installed and on your path.
 
+#### Source
+
+    ./configure \
+        --enable-gpl --enable-nonfree --enable-pthreads \
+        --enable-libfaac --enable-libfaad --enable-libmp3lame \
+        --enable-libx264
+    sudo make install
+
 #### Mac OS X
 
 The easiest way to get ffmpeg is via [MacPorts](http://macports.org).
