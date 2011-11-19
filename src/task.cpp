@@ -8,6 +8,7 @@ static Persistent<String> _task_duration_symbol;
 static Persistent<String> _task_timeElapsed_symbol;
 static Persistent<String> _task_timeEstimated_symbol;
 static Persistent<String> _task_timeRemaining_symbol;
+static Persistent<String> _task_timeMultiplier_symbol;
 
 static Persistent<FunctionTemplate> _task_ctor;
 
@@ -19,6 +20,7 @@ void Task::Init(Handle<Object> target) {
   _task_timeElapsed_symbol = NODE_PSYMBOL("timeElapsed");
   _task_timeEstimated_symbol = NODE_PSYMBOL("timeEstimated");
   _task_timeRemaining_symbol = NODE_PSYMBOL("timeRemaining");
+  _task_timeMultiplier_symbol = NODE_PSYMBOL("timeMultiplier");
 
   Local<FunctionTemplate> ctor = FunctionTemplate::New(New);
   ctor->InstanceTemplate()->SetInternalFieldCount(1);
@@ -92,6 +94,7 @@ Handle<Value> Task::GetProgress(Local<String> property,
   result->Set(_task_timeElapsed_symbol, Number::New(3));
   result->Set(_task_timeEstimated_symbol, Number::New(4));
   result->Set(_task_timeRemaining_symbol, Number::New(5));
+  result->Set(_task_timeMultiplier_symbol, Number::New(1));
 
   return scope.Close(result);
 }

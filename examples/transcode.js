@@ -68,7 +68,8 @@ task.on('begin', function(sourceInfo, targetInfo) {
 });
 task.on('progress', function(timestamp, duration) {
   // New progress made, currrently at timestamp out of duration
-  console.log('progress ' + progress.timestamp + ' / ' + progress.duration);
+  console.log(util.inspect(progress));
+  console.log('progress ' + (progress.timestamp / progress.duration) + '%');
 });
 task.on('error', function(err) {
   // Error occurred

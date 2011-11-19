@@ -167,7 +167,17 @@ track events.
     });
     task.on('progress', function(timestamp, duration) {
       // New progress made, currrently at timestamp out of duration
-      console.log('progress ' + progress.timestamp + ' / ' + progress.duration);
+      // progress = {
+      //   timestamp: 0,        // current seconds timestamp in the media
+      //   duration: 0,         // total seconds in the media
+      //   timeElapsed: 0,      // seconds elapsed so far
+      //   timeEstimated: 0,    // seconds estimated for total task
+      //   timeRemaining: 0,    // seconds remaining until done
+      //   timeMultiplier: 2    // multiples of real time the transcoding is
+      //                        // occuring in (2 = 2x media time)
+      // }
+      console.log(util.inspect(progress));
+      console.log('progress ' + (progress.timestamp / progress.duration) + '%');
     });
     task.on('error', function(err) {
       // Error occurred, transcoding ending
