@@ -72,6 +72,12 @@ You may also need to add the MacPorts paths to your `~./profile`:
 
 ## API
 
+### Sources/targets
+
+All APIs take a source and target. Today these must be file paths that can be
+accessed by normal filesystem APIs. In the future they can be node streams, or
+in the case of sources HTTP or any other protocol node can open.
+
 ### Media Information
 
 Whenever 'info' is used, it refers to a MediaInfo object that looks something
@@ -168,3 +174,20 @@ track events.
 
     // At any time, abort transcoding
     task.stop();
+
+### HTTP Live Streaming
+
+If you are targetting devices that support HTTP Live Streaming (like iOS), you
+can have the transcoder build the output in realtime as it processes. This
+enables playback while the transcoding is occuring, as well as some other fancy
+things such as client-side stream switching (changing audio channels/etc).
+
+    // TODO: API for this... something like:
+    // (where target is used as a base filename for all the extra stuff)
+    var task = transcode.createTask(source, target, {
+      profile: ...,
+      streaming: {
+        segmentDuration: 10,
+        allowCaching: true
+      }
+    });
