@@ -35,6 +35,7 @@ def build(bld):
   t.uselib = ['LIBAVUTIL', 'LIBAVFORMAT', 'LIBAVCODEC']
   t.source = [
     'src/binding.cpp',
+    'src/io.cpp',
     'src/mediainfo.cpp',
     'src/task.cpp'
   ]

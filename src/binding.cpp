@@ -1,6 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
+#include "io.h"
 #include "mediainfo.h"
 #include "task.h"
 
@@ -22,41 +23,15 @@ static Handle<Value> setDebugLevel(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
-static AVFormatContext* openMedia(const char* sourcePath, int* pret) {
-  AVFormatContext* ctx = NULL;
-  int ret = 0;
-  *pret = 0;
-
-  ret = avformat_open_input(&ctx, sourcePath, NULL, NULL);
-  if (ret < 0) {
-    goto CLEANUP;
-  }
-
-  ret = av_find_stream_info(ctx);
-  if (ret < 0) {
-    goto CLEANUP;
-  }
-
-  return ctx;
-
-CLEANUP:
-  if (ctx) {
-    avformat_free_context(ctx);
-  }
-  *pret = ret;
-  return NULL;
-}
-
 static Handle<Value> queryInfo(const Arguments& args) {
   HandleScope scope;
 
-  Local<String> source = args[0]->ToString();
-  String::AsciiValue asciiSourcePath(source);
+  Local<Object> source = args[0]->ToObject();
 
   Local<Function> callback = args[1].As<Function>();
 
   int ret = 0;
-  AVFormatContext* ctx = openMedia(*asciiSourcePath, &ret);
+  AVFormatContext* ctx = createInputContext(source, &ret);
   if (ret) {
     // Failed to open/parse
     char buffer[256];
@@ -71,7 +46,7 @@ static Handle<Value> queryInfo(const Arguments& args) {
     //av_dump_format(ctx, 0, NULL, 0);
     Local<Object> result = Local<Object>::New(createMediaInfo(ctx, false));
 
-    avformat_free_context(ctx);
+    cleanupContext(ctx);
 
     Handle<Value> argv[] = {
       Undefined(),

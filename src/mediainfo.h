@@ -2,11 +2,6 @@
 #include <v8.h>
 #include "utils.h"
 
-extern "C" {
-#include "libavformat/avformat.h"
-#include "libavcodec/avcodec.h"
-}
-
 #ifndef NODE_TRANSCODE_MEDIAINFO
 #define NODE_TRANSCODE_MEDIAINFO
 

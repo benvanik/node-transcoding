@@ -1,6 +1,11 @@
 #include <node.h>
 #include <v8.h>
 
+extern "C" {
+#include "libavformat/avformat.h"
+#include "libavcodec/avcodec.h"
+}
+
 #ifndef NODE_TRANSCODE_UTILS
 #define NODE_TRANSCODE_UTILS
 
