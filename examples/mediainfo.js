@@ -20,6 +20,11 @@ if (!path.existsSync(inputFile)) {
 }
 
 transcode.queryInfo(inputFile, function(err, info) {
-  util.puts('Info for ' + inputFile + ':');
-  util.puts(util.inspect(info, false, 3));
+  console.log('Info for ' + inputFile + ':');
+  if (err) {
+    console.log('Error!');
+    console.log(err);
+  } else {
+    console.log(util.inspect(info, false, 3));
+  }
 });

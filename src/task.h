@@ -2,6 +2,10 @@
 #include <v8.h>
 #include "utils.h"
 
+extern "C" {
+#include "libavformat/avformat.h"
+}
+
 #ifndef NODE_TRANSCODE_TASK
 #define NODE_TRANSCODE_TASK
 

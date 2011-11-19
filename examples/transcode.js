@@ -35,8 +35,8 @@ if (!path.existsSync(inputFile)) {
 if (opts.args.length < 2) {
   // No output given, so just query info
   transcode.queryInfo(inputFile, function(err, info) {
-    util.puts('Info for ' + inputFile + ':');
-    util.puts(util.inspect(info, false, 3));
+    console.log('Info for ' + inputFile + ':');
+    console.log(util.inspect(info, false, 3));
   });
   return;
 }

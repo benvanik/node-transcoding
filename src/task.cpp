@@ -1,9 +1,5 @@
 #include "task.h"
 
-extern "C" {
-#include "libavformat/avformat.h"
-}
-
 using namespace transcode;
 using namespace v8;
 
@@ -123,4 +119,3 @@ Handle<Value> Task::Stop(const Arguments& args) {
 
   return scope.Close(Undefined());
 }
-
