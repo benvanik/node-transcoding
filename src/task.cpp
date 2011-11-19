@@ -1,4 +1,5 @@
 #include "task.h"
+#include "mediainfo.h"
 
 using namespace transcode;
 using namespace v8;
@@ -56,6 +57,8 @@ Task::Task(
   this->source = Persistent<Object>::New(source);
   this->target = Persistent<Object>::New(target);
   this->options = Persistent<Object>::New(options);
+
+  memset(&this->currentProgress, 0, sizeof(this->currentProgress));
 }
 
 Task::~Task() {
@@ -82,21 +85,35 @@ Handle<Value> Task::GetOptions(Local<String> property,
   return scope.Close(task->options);
 }
 
+Handle<Value> Task::GetProgressInternal(Progress* progress) {
+  HandleScope scope;
+
+  Local<Object> result = Object::New();
+
+  result->Set(_task_timestamp_symbol,
+      Number::New(progress->timestamp));
+  result->Set(_task_duration_symbol,
+      Number::New(progress->timestamp));
+  result->Set(_task_timeElapsed_symbol,
+      Number::New(progress->timestamp));
+  result->Set(_task_timeEstimated_symbol,
+      Number::New(progress->timestamp));
+  result->Set(_task_timeRemaining_symbol,
+      Number::New(progress->timestamp));
+  result->Set(_task_timeMultiplier_symbol,
+      Number::New(progress->timestamp));
+
+  return scope.Close(result);
+}
+
 Handle<Value> Task::GetProgress(Local<String> property,
     const AccessorInfo& info) {
   Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
 
-  Local<Object> result = Object::New();
+  Progress* progress = &task->currentProgress;
 
-  result->Set(_task_timestamp_symbol, Number::New(1));
-  result->Set(_task_duration_symbol, Number::New(2));
-  result->Set(_task_timeElapsed_symbol, Number::New(3));
-  result->Set(_task_timeEstimated_symbol, Number::New(4));
-  result->Set(_task_timeRemaining_symbol, Number::New(5));
-  result->Set(_task_timeMultiplier_symbol, Number::New(1));
-
-  return scope.Close(result);
+  return scope.Close(task->GetProgressInternal(progress));
 }
 
 Handle<Value> Task::Start(const Arguments& args) {
@@ -121,4 +138,50 @@ Handle<Value> Task::Stop(const Arguments& args) {
   printf("stop\n");
 
   return scope.Close(Undefined());
+}
+
+void Task::EmitBegin(AVFormatContext* ictx, AVFormatContext* octx) {
+  HandleScope scope;
+
+  Local<Object> sourceInfo = Local<Object>::New(createMediaInfo(ictx, false));
+  Local<Object> targetInfo = Local<Object>::New(createMediaInfo(octx, true));
+
+  Handle<Value> argv[] = {
+    String::New("begin"),
+    sourceInfo,
+    targetInfo,
+  };
+  node::MakeCallback(this->handle_, "emit", countof(argv), argv);
+}
+
+void Task::EmitProgress(Progress progress) {
+  HandleScope scope;
+
+  Handle<Value> argv[] = {
+    String::New("progress"),
+    this->GetProgressInternal(&progress),
+  };
+  node::MakeCallback(this->handle_, "emit", countof(argv), argv);
+}
+
+void Task::EmitError(int err) {
+  HandleScope scope;
+
+  char buffer[256];
+  av_strerror(err, buffer, sizeof(buffer));
+
+  Handle<Value> argv[] = {
+    String::New("error"),
+    Exception::Error(String::New(buffer)),
+  };
+  node::MakeCallback(this->handle_, "emit", countof(argv), argv);
+}
+
+void Task::EmitEnded() {
+  HandleScope scope;
+
+  Handle<Value> argv[] = {
+    String::New("end"),
+  };
+  node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }

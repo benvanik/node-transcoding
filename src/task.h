@@ -1,6 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
+#include "processor.h"
 
 #ifndef NODE_TRANSCODE_TASK
 #define NODE_TRANSCODE_TASK
@@ -30,10 +31,21 @@ public:
   static Handle<Value> Start(const Arguments& args);
   static Handle<Value> Stop(const Arguments& args);
 
+public:
+  void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx);
+  void EmitProgress(Progress progress);
+  void EmitError(int err);
+  void EmitEnded();
+
+private:
+  Handle<Value> GetProgressInternal(Progress* progress);
+
 private:
   Persistent<Object>      source;
   Persistent<Object>      target;
   Persistent<Object>      options;
+
+  Progress                currentProgress;
 };
 
 }; // transcode
