@@ -59,7 +59,7 @@ var task = transcode.createTask(inputFile, outputFile, {
   profile: profile
 });
 task.on('begin', function(sourceInfo, targetInfo) {
-  // transcoding beginning
+  // Transcoding beginning
   console.log('transcoding beginning...');
   console.log('source:');
   console.log(util.inspect(sourceInfo));
@@ -67,15 +67,15 @@ task.on('begin', function(sourceInfo, targetInfo) {
   console.log(util.inspect(targetInfo));
 });
 task.on('progress', function(timestamp, duration) {
-  // new progress made, currrently at timestamp out of duration
+  // New progress made, currrently at timestamp out of duration
   console.log('progress ' + progress.timestamp + ' / ' + progress.duration);
 });
 task.on('error', function(err) {
-  // error occurred
+  // Error occurred
   console.log('error: ' + err);
 });
 task.on('end', function() {
-  // transcoding has completed
+  // Transcoding has completed
   console.log('finished');
 });
 task.start();
