@@ -9,6 +9,19 @@ using namespace v8;
 
 namespace transcode {
 
+static Handle<Value> setDebugLevel(const Arguments& args) {
+  HandleScope scope;
+
+  Local<Boolean> debugLog = args[0]->ToBoolean();
+  if (debugLog->Value()) {
+    av_log_set_level(AV_LOG_DEBUG);
+  } else {
+    av_log_set_level(AV_LOG_QUIET);
+  }
+
+  return scope.Close(Undefined());
+}
+
 static AVFormatContext* openMedia(const char* sourcePath, int* pret) {
   AVFormatContext* ctx = NULL;
   int ret = 0;
@@ -77,13 +90,12 @@ extern "C" void node_transcode_init(Handle<Object> target) {
 
   // One-time prep
   av_register_all();
-  //av_log_set_level(AV_LOG_QUIET);
-  av_log_set_level(AV_LOG_DEBUG);
+  av_log_set_level(AV_LOG_QUIET);
 
   transcode::Task::Init(target);
 
-  target->Set(String::NewSymbol("queryInfo"),
-      FunctionTemplate::New(transcode::queryInfo)->GetFunction());
+  NODE_SET_METHOD(target, "setDebugLevel", transcode::setDebugLevel);
+  NODE_SET_METHOD(target, "queryInfo", transcode::queryInfo);
 }
 
 NODE_MODULE(node_transcode, node_transcode_init);

@@ -37,8 +37,10 @@ From source:
 
 ### Dependencies
 
-node-transcode requires the command-line `ffmpeg` tool to run. Make sure
-it's installed and on your path.
+node-transcode requires `ffmpeg` and its libraries `avformat` and `avcodec`.
+Make sure it's installed and on your path. It must be compiled with libx264 to
+support most output - note that some distributions don't include this and you
+may have to compile it yourself. Annoying, I know.
 
 #### Source
 
