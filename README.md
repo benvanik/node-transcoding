@@ -92,6 +92,9 @@ like this:
         {
           type: 'video',
           codec: 'h264',
+          profile: 'Main',
+          profileId: 77,
+          profileLevel: 30,
           resolution: { width: 640, height: 360 },
           bitrate: 686000,
           fps: 29.97
@@ -105,6 +108,10 @@ like this:
         }
       ]
     }
+
+Note that many of these fields are optional, such as bitrate, language, profile
+information, and even fps/duration. Don't go using the values without checking
+for undefined first.
 
 ### Querying Media Information
 
