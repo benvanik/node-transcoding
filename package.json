@@ -12,16 +12,22 @@
     "audio",
     "video",
     "media",
-    "transcode"
+    "transcode",
+    "streaming"
   ],
   "directories": {
     "lib": "./lib/transcode"
   },
   "main": "./lib/transcode",
+  "bin": {
+    "transcode" : "./examples/transcode.js"
+  },
   "dependencies": {
-    "async": "0.1.15"
+    "tav": "0.1.0"
   },
   "scripts": {
+    "preinstall": "node-waf configure && node-waf build",
+    "preuninstall": "rm -rf build/*"
   },
   "engines": {
     "node": ">= 0.6.x"
