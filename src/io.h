@@ -9,8 +9,29 @@ using namespace v8;
 
 namespace transcode {
 
-AVFormatContext* createInputContext(Handle<Object> source, int* pret);
-AVFormatContext* createOutputContext(Handle<Object> target, int* pret);
+class IODescriptor {
+public:
+  IODescriptor(Handle<Object> source);
+  virtual ~IODescriptor();
+
+public:
+  char* filename;
+};
+
+class InputDescriptor : public IODescriptor {
+public:
+  InputDescriptor(Handle<Object> source);
+  virtual ~InputDescriptor();
+};
+
+class OutputDescriptor : public IODescriptor {
+public:
+  OutputDescriptor(Handle<Object> target);
+  virtual ~OutputDescriptor();
+};
+
+AVFormatContext* createInputContext(InputDescriptor* descr, int* pret);
+AVFormatContext* createOutputContext(OutputDescriptor* descr, int* pret);
 void cleanupContext(AVFormatContext* ctx);
 
 }; // transcode

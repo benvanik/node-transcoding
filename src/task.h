@@ -10,7 +10,7 @@ using namespace v8;
 
 namespace transcode {
 
-class Task : public node::ObjectWrap {
+class Task : public node::ObjectWrap, public ProcessorSink {
 public:
   static void Init(Handle<Object> target);
   static Handle<Value> New(const Arguments& args);
@@ -32,10 +32,10 @@ public:
   static Handle<Value> Stop(const Arguments& args);
 
 public:
-  void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx);
-  void EmitProgress(Progress progress);
-  void EmitError(int err);
-  void EmitEnded();
+  virtual void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx);
+  virtual void EmitProgress(Progress progress);
+  virtual void EmitError(int err);
+  virtual void EmitEnd();
 
 private:
   Handle<Value> GetProgressInternal(Progress* progress);
@@ -45,7 +45,7 @@ private:
   Persistent<Object>      target;
   Persistent<Object>      options;
 
-  Progress                currentProgress;
+  Processor               processor;
 };
 
 }; // transcode

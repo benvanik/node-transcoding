@@ -165,7 +165,7 @@ track events.
       console.log('target:');
       console.log(util.inspect(targetInfo));
     });
-    task.on('progress', function(timestamp, duration) {
+    task.on('progress', function(progress) {
       // New progress made, currrently at timestamp out of duration
       // progress = {
       //   timestamp: 0,        // current seconds timestamp in the media

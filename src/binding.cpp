@@ -31,7 +31,8 @@ static Handle<Value> queryInfo(const Arguments& args) {
   Local<Function> callback = args[1].As<Function>();
 
   int ret = 0;
-  AVFormatContext* ctx = createInputContext(source, &ret);
+  InputDescriptor input(source);
+  AVFormatContext* ctx = createInputContext(&input, &ret);
   if (ret) {
     // Failed to open/parse
     char buffer[256];

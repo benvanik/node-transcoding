@@ -1,6 +1,8 @@
+#include <pthread.h>
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
+#include "io.h"
 
 #ifndef NODE_TRANSCODE_PROCESSOR
 #define NODE_TRANSCODE_PROCESSOR
@@ -8,6 +10,12 @@
 using namespace v8;
 
 namespace transcode {
+
+class ProcessorOptions {
+public:
+  ProcessorOptions(Handle<Object> source);
+  ~ProcessorOptions();
+};
 
 typedef struct Progress_t {
   double    timestamp;
@@ -18,7 +26,59 @@ typedef struct Progress_t {
   double    timeMultiplier;
 } Progress;
 
-int beginProcessing();
+class ProcessorSink {
+protected:
+  ProcessorSink() {}
+public:
+  virtual ~ProcessorSink() {}
+
+  virtual void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx) = 0;
+  virtual void EmitProgress(Progress progress) = 0;
+  virtual void EmitError(int err) = 0;
+  virtual void EmitEnd() = 0;
+};
+
+class Processor {
+public:
+  Processor();
+  ~Processor();
+
+  void SetSink(ProcessorSink* sink);
+
+  void Execute(InputDescriptor* input, OutputDescriptor* output,
+      ProcessorOptions* options, Handle<Object> obj);
+
+  Progress GetProgress();
+  void Abort();
+
+private:
+  static void ThreadWorker(uv_work_t* request);
+  static void ThreadWorkerComplete(uv_work_t* request);
+
+  static void EmitBegin(uv_async_t* handle, int status);
+  static void EmitBeginClose(uv_handle_t* handle);
+  static void EmitProgress(uv_async_t* handle, int status);
+  static void EmitProgressClose(uv_handle_t* handle);
+  static void EmitError(uv_async_t* handle, int status);
+  static void EmitErrorClose(uv_handle_t* handle);
+  static void EmitEnd(uv_async_t* handle, int status);
+  static void EmitEndClose(uv_handle_t* handle);
+
+private:
+  ProcessorSink*      sink;
+  pthread_mutex_t     lock;
+
+  Progress            progress;
+
+  // All guarded by lock
+  bool                running;
+  bool                abort;
+  InputDescriptor*    input;
+  OutputDescriptor*   output;
+  ProcessorOptions*   options;
+  AVFormatContext*    ictx;
+  AVFormatContext*    octx;
+};
 
 }; // transcode
 

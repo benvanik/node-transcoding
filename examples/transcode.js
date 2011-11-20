@@ -66,7 +66,7 @@ task.on('begin', function(sourceInfo, targetInfo) {
   console.log('target:');
   console.log(util.inspect(targetInfo));
 });
-task.on('progress', function(timestamp, duration) {
+task.on('progress', function(progress) {
   // New progress made, currrently at timestamp out of duration
   console.log(util.inspect(progress));
   console.log('progress ' + (progress.timestamp / progress.duration) + '%');

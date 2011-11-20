@@ -58,7 +58,8 @@ Task::Task(
   this->target = Persistent<Object>::New(target);
   this->options = Persistent<Object>::New(options);
 
-  memset(&this->currentProgress, 0, sizeof(this->currentProgress));
+  // Not retained - lifetime is tied to this instance
+  this->processor.SetSink(this);
 }
 
 Task::~Task() {
@@ -111,22 +112,19 @@ Handle<Value> Task::GetProgress(Local<String> property,
   Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
 
-  Progress* progress = &task->currentProgress;
+  Progress progress = task->processor.GetProgress();
 
-  return scope.Close(task->GetProgressInternal(progress));
+  return scope.Close(task->GetProgressInternal(&progress));
 }
 
 Handle<Value> Task::Start(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  printf("start\n");
-
-  // TODO: emit events
-  Handle<Value> argv[] = {
-    String::New("end"),
-  };
-  node::MakeCallback(args.This(), "emit", countof(argv), argv);
+  InputDescriptor* input = new InputDescriptor(task->source);
+  OutputDescriptor* output = new OutputDescriptor(task->target);
+  ProcessorOptions* options = new ProcessorOptions(task->options);
+  task->processor.Execute(input, output, options, args.This());
 
   return scope.Close(Undefined());
 }
@@ -135,7 +133,7 @@ Handle<Value> Task::Stop(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  printf("stop\n");
+  task->processor.Abort();
 
   return scope.Close(Undefined());
 }
@@ -144,12 +142,12 @@ void Task::EmitBegin(AVFormatContext* ictx, AVFormatContext* octx) {
   HandleScope scope;
 
   Local<Object> sourceInfo = Local<Object>::New(createMediaInfo(ictx, false));
-  Local<Object> targetInfo = Local<Object>::New(createMediaInfo(octx, true));
+  //Local<Object> targetInfo = Local<Object>::New(createMediaInfo(octx, true));
 
   Handle<Value> argv[] = {
     String::New("begin"),
     sourceInfo,
-    targetInfo,
+    Null(),//targetInfo,
   };
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
@@ -177,7 +175,7 @@ void Task::EmitError(int err) {
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
 
-void Task::EmitEnded() {
+void Task::EmitEnd() {
   HandleScope scope;
 
   Handle<Value> argv[] = {
