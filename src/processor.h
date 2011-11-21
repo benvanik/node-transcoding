@@ -52,6 +52,8 @@ public:
   void Abort();
 
 private:
+  static AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
+      int* pret);
   static void ThreadWorker(uv_work_t* request);
   static void ThreadWorkerComplete(uv_work_t* request);
 

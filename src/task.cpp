@@ -142,12 +142,12 @@ void Task::EmitBegin(AVFormatContext* ictx, AVFormatContext* octx) {
   HandleScope scope;
 
   Local<Object> sourceInfo = Local<Object>::New(createMediaInfo(ictx, false));
-  //Local<Object> targetInfo = Local<Object>::New(createMediaInfo(octx, true));
+  Local<Object> targetInfo = Local<Object>::New(createMediaInfo(octx, true));
 
   Handle<Value> argv[] = {
     String::New("begin"),
     sourceInfo,
-    Null(),//targetInfo,
+    targetInfo,
   };
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }

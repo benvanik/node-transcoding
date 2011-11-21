@@ -81,7 +81,7 @@ Handle<Object> transcode::createMediaInfo(AVFormatContext* ctx, bool encoding) {
         continue;
     }
 
-    AVCodec* codec = encoding ?
+    AVCodec* codec = false ?
         avcodec_find_encoder(sc->codec_id) :
         avcodec_find_decoder(sc->codec_id);
     if (codec) {

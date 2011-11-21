@@ -62,9 +62,9 @@ task.on('begin', function(sourceInfo, targetInfo) {
   // Transcoding beginning
   console.log('transcoding beginning...');
   console.log('source:');
-  console.log(util.inspect(sourceInfo));
+  console.log(util.inspect(sourceInfo, false, 3));
   console.log('target:');
-  console.log(util.inspect(targetInfo));
+  console.log(util.inspect(targetInfo, false, 3));
 });
 task.on('progress', function(progress) {
   // New progress made, currrently at timestamp out of duration

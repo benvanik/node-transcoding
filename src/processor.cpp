@@ -86,6 +86,97 @@ void Processor::Execute(InputDescriptor* input, OutputDescriptor* output,
   assert(status == 0);
 }
 
+AVStream* Processor::AddOutputStreamCopy(AVFormatContext* octx,
+    AVStream* istream, int* pret) {
+  int ret = 0;
+  AVStream* ostream = NULL;
+  AVCodecContext* icodec = NULL;
+  AVCodecContext* ocodec = NULL;
+
+  ostream = av_new_stream(octx, 0);
+  if (!ostream) {
+    ret = AVERROR_NOMEM;
+    goto CLEANUP;
+  }
+
+  icodec = istream->codec;
+  ocodec = ostream->codec;
+
+  ocodec->codec_id                = icodec->codec_id;
+  ocodec->codec_type              = icodec->codec_type;
+  ocodec->codec_tag               = icodec->codec_tag;
+  ocodec->profile                 = icodec->profile;
+  ocodec->level                   = icodec->level;
+  ocodec->bit_rate                = icodec->bit_rate;
+  ocodec->bits_per_raw_sample     = icodec->bits_per_raw_sample;
+  ocodec->chroma_sample_location  = icodec->chroma_sample_location;
+  ocodec->rc_max_rate             = icodec->rc_max_rate;
+  ocodec->rc_buffer_size          = icodec->rc_buffer_size;
+
+  ocodec->extradata               = (uint8_t*)av_mallocz(
+      icodec->extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
+  if (!ocodec->extradata) {
+    ret = AVERROR(ENOMEM);
+    goto CLEANUP;
+  }
+  memcpy(ocodec->extradata, icodec->extradata, icodec->extradata_size);
+  ocodec->extradata_size          = icodec->extradata_size;
+
+  if (av_q2d(icodec->time_base) * icodec->ticks_per_frame >
+      av_q2d(istream->time_base) && av_q2d(istream->time_base) < 1 / 1000.0) {
+    ocodec->time_base             = icodec->time_base;
+    ocodec->time_base.num         *= icodec->ticks_per_frame;
+  } else {
+    ocodec->time_base             = istream->time_base;
+  }
+
+  switch (icodec->codec_type) {
+  case CODEC_TYPE_VIDEO:
+    ocodec->pix_fmt             = icodec->pix_fmt;
+    ocodec->width               = icodec->width;
+    ocodec->height              = icodec->height;
+    ocodec->has_b_frames        = icodec->has_b_frames;
+    if (!ocodec->sample_aspect_ratio.num) {
+      ocodec->sample_aspect_ratio = ostream->sample_aspect_ratio =
+          istream->sample_aspect_ratio.num ? istream->sample_aspect_ratio :
+          icodec->sample_aspect_ratio.num ? icodec->sample_aspect_ratio :
+          (AVRational){0, 1};
+    }
+    if (octx->oformat->flags & AVFMT_GLOBALHEADER) {
+      ocodec->flags           |= CODEC_FLAG_GLOBAL_HEADER;
+    }
+    break;
+  case CODEC_TYPE_AUDIO:
+    ocodec->channel_layout      = icodec->channel_layout;
+    ocodec->sample_rate         = icodec->sample_rate;
+    ocodec->sample_fmt          = icodec->sample_fmt;
+    ocodec->channels            = icodec->channels;
+    ocodec->frame_size          = icodec->frame_size;
+    ocodec->audio_service_type  = icodec->audio_service_type;
+    if ((icodec->block_align == 1 && icodec->codec_id == CODEC_ID_MP3) ||
+        icodec->codec_id == CODEC_ID_AC3) {
+      ocodec->block_align       = 0;
+    } else {
+      ocodec->block_align       = icodec->block_align;
+    }
+    break;
+  case CODEC_TYPE_SUBTITLE:
+    // ?
+    ocodec->width               = icodec->width;
+    ocodec->height              = icodec->height;
+    break;
+  default:
+    break;
+  }
+
+  return ostream;
+
+CLEANUP:
+  *pret = ret;
+  // TODO: cleanup ostream?
+  return NULL;
+}
+
 void Processor::ThreadWorker(uv_work_t* request) {
   ProcessorReq* req = static_cast<ProcessorReq*>(request->data);
   Processor* processor = req->processor;
@@ -112,10 +203,41 @@ void Processor::ThreadWorker(uv_work_t* request) {
 
   // Setup output container
   if (!ret) {
+    AVOutputFormat* ofmt = av_guess_format("mov", NULL, NULL);
+    if (ofmt) {
+      octx->oformat = ofmt;
+    } else {
+      ret = AVERROR_NOFMT;
+    }
+    octx->duration    = ictx->duration;
+    octx->start_time  = ictx->start_time;
+    octx->bit_rate    = ictx->bit_rate;
   }
 
   // Setup streams
   if (!ret) {
+    for (int n = 0; n < ictx->nb_streams; n++) {
+      AVStream* stream = ictx->streams[n];
+      switch (stream->codec->codec_type) {
+      case CODEC_TYPE_VIDEO:
+      case CODEC_TYPE_AUDIO:
+      case CODEC_TYPE_SUBTITLE:
+        stream->discard = AVDISCARD_NONE;
+        AddOutputStreamCopy(octx, stream, &ret);
+        break;
+      default:
+        stream->discard = AVDISCARD_ALL;
+        break;
+      }
+      if (ret) {
+        break;
+      }
+    }
+  }
+
+  // Write header
+  if (!ret) {
+    ret = avformat_write_header(octx, NULL);
   }
 
   // Stash away on the processor (they will be cleaned up on destruction)
