@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "io.h"
 #include "mediainfo.h"
-#include "task.h"
+//#include "task.h"
 
 using namespace transcode;
 using namespace v8;
@@ -27,12 +27,12 @@ static Handle<Value> queryInfo(const Arguments& args) {
   HandleScope scope;
 
   Local<Object> source = args[0]->ToObject();
+  IOHandle* input = IOHandle::Create(source);
 
   Local<Function> callback = args[1].As<Function>();
 
   int ret = 0;
-  InputDescriptor input(source);
-  AVFormatContext* ctx = createInputContext(&input, &ret);
+  AVFormatContext* ctx = createInputContext(input, &ret);
   if (ret) {
     // Failed to open/parse
     char buffer[256];
@@ -47,14 +47,14 @@ static Handle<Value> queryInfo(const Arguments& args) {
     //av_dump_format(ctx, 0, NULL, 0);
     Local<Object> result = Local<Object>::New(createMediaInfo(ctx, false));
 
-    cleanupContext(ctx);
-
     Handle<Value> argv[] = {
       Undefined(),
       result,
     };
     callback->Call(Context::GetCurrent()->Global(), countof(argv), argv);
   }
+
+  delete input;
 
   return scope.Close(Undefined());
 }
@@ -68,7 +68,7 @@ extern "C" void node_transcode_init(Handle<Object> target) {
   av_register_all();
   av_log_set_level(AV_LOG_QUIET);
 
-  transcode::Task::Init(target);
+  //transcode::Task::Init(target);
 
   NODE_SET_METHOD(target, "setDebugLevel", transcode::setDebugLevel);
   NODE_SET_METHOD(target, "queryInfo", transcode::queryInfo);

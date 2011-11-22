@@ -9,30 +9,67 @@ using namespace v8;
 
 namespace transcode {
 
-class IODescriptor {
+class IOHandle {
 public:
-  IODescriptor(Handle<Object> source);
-  virtual ~IODescriptor();
+  IOHandle(Handle<Object> source);
+  virtual ~IOHandle();
+
+  static IOHandle* Create(Handle<Object> source);
+
+  virtual AVIOContext* openRead() = 0;
+  virtual AVIOContext* openWrite() = 0;
+  virtual void close(AVIOContext* s) = 0;
 
 public:
-  char* filename;
+  Persistent<Object>  source;
 };
 
-class InputDescriptor : public IODescriptor {
+class FileHandle : public IOHandle {
 public:
-  InputDescriptor(Handle<Object> source);
-  virtual ~InputDescriptor();
+  FileHandle(Handle<Object> source);
+  virtual ~FileHandle();
+
+  virtual AVIOContext* openRead();
+  virtual AVIOContext* openWrite();
+  virtual void close(AVIOContext* s);
+
+public:
+  std::string     path;
 };
 
-class OutputDescriptor : public IODescriptor {
+class StreamHandle : public IOHandle {
 public:
-  OutputDescriptor(Handle<Object> target);
-  virtual ~OutputDescriptor();
+  StreamHandle(Handle<Object> source);
+  virtual ~StreamHandle();
+
+  virtual AVIOContext* openRead();
+  virtual AVIOContext* openWrite();
+  virtual void close(AVIOContext* s);
+
+private:
+
+  static int ReadPacket(void* opaque, uint8_t* buffer, int bufferSize);
+  static int WritePacket(void* opaque, uint8_t* buffer, int bufferSize);
+  static int64_t Seek(void* opaque, int64_t offset, int whence);
+
+public:
+  bool            canSeek;
 };
 
-AVFormatContext* createInputContext(InputDescriptor* descr, int* pret);
-AVFormatContext* createOutputContext(OutputDescriptor* descr, int* pret);
-void cleanupContext(AVFormatContext* ctx);
+class LiveStreamingHandle : public IOHandle {
+public:
+  LiveStreamingHandle(Handle<Object> source);
+  virtual ~LiveStreamingHandle();
+
+  // TODO: open segment/etc
+  //FileHandle* createSegment(std::string name);
+
+public:
+  std::string     path;
+};
+
+AVFormatContext* createInputContext(IOHandle* input, int* pret);
+AVFormatContext* createOutputContext(IOHandle* output, int* pret);
 
 }; // transcode
 

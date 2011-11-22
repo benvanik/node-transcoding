@@ -2,41 +2,149 @@
 
 using namespace transcode;
 
-IODescriptor::IODescriptor(Handle<Object> source) :
-    filename(NULL) {
+IOHandle::IOHandle(Handle<Object> source) {
+  HandleScope scope;
+
+  this->source = Persistent<Object>::New(source);
+}
+
+IOHandle::~IOHandle() {
+  this->source.Dispose();
+}
+
+IOHandle* IOHandle::Create(Handle<Object> source) {
+  HandleScope scope;
+
   if (source->IsStringObject()) {
-    String::AsciiValue asciiSource(source);
-    this->filename = strdup(*asciiSource);
+    return new FileHandle(source);
+  } else {
+    return new StreamHandle(source);
   }
 }
 
-IODescriptor::~IODescriptor() {
-  if (this->filename) {
-    free(this->filename);
-    this->filename = NULL;
+FileHandle::FileHandle(Handle<Object> source) :
+    IOHandle(source) {
+  HandleScope scope;
+
+  this->path = *String::AsciiValue(source);
+}
+
+FileHandle::~FileHandle() {
+}
+
+AVIOContext* FileHandle::openRead() {
+  AVIOContext* s = NULL;
+  int ret = avio_open(&s, this->path.c_str(), AVIO_RDONLY);
+  if (ret) {
+    return NULL;
   }
+  return s;
 }
 
-InputDescriptor::InputDescriptor(Handle<Object> source) :
-    IODescriptor(source) {
+AVIOContext* FileHandle::openWrite() {
+  AVIOContext* s = NULL;
+  int ret = avio_open(&s, this->path.c_str(), AVIO_WRONLY);
+  if (ret) {
+    return NULL;
+  }
+  return s;
 }
 
-InputDescriptor::~InputDescriptor() {
+void FileHandle::close(AVIOContext* s) {
+  avio_close(s);
 }
 
-OutputDescriptor::OutputDescriptor(Handle<Object> target) :
-    IODescriptor(target) {
+StreamHandle::StreamHandle(Handle<Object> source) :
+    IOHandle(source) {
+  HandleScope scope;
+
+  // TODO: detect if can seek
+  this->canSeek = true;
 }
 
-OutputDescriptor::~OutputDescriptor() {
+StreamHandle::~StreamHandle() {
 }
 
-AVFormatContext* createFileInputContext(const char* path, int* pret) {
+#define STREAM_HANDLE_BUFFER_SIZE (64 * 1024)
+
+AVIOContext* StreamHandle::openRead() {
+  int bufferSize = STREAM_HANDLE_BUFFER_SIZE;
+  uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
+  AVIOContext* s = avio_alloc_context(
+      buffer, bufferSize,
+      0, // 1 = write
+      this,
+      ReadPacket, NULL, this->canSeek ? Seek : NULL);
+  return s;
+}
+
+AVIOContext* StreamHandle::openWrite() {
+  int bufferSize = STREAM_HANDLE_BUFFER_SIZE;
+  uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
+  AVIOContext* s = avio_alloc_context(
+      buffer, bufferSize,
+      1, // 1 = write
+      this,
+      NULL, WritePacket, this->canSeek ? Seek : NULL);
+  return s;
+}
+
+void StreamHandle::close(AVIOContext* s) {
+  av_free(s);
+}
+
+int StreamHandle::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
+  HandleScope scope;
+  StreamHandle* stream = static_cast<StreamHandle*>(opaque);
+  // TODO: read
+  //stream->source->Call()
+  return 0;
+}
+
+int StreamHandle::WritePacket(void* opaque, uint8_t* buffer, int bufferSize) {
+  HandleScope scope;
+  StreamHandle* stream = static_cast<StreamHandle*>(opaque);
+  // TODO: write
+  //stream->source->Call()
+  return 0;
+}
+
+int64_t StreamHandle::Seek(void* opaque, int64_t offset, int whence) {
+  HandleScope scope;
+  StreamHandle* stream = static_cast<StreamHandle*>(opaque);
+  // TODO: seek
+  //stream->source->Call()
+  return 0;
+}
+
+LiveStreamingHandle::LiveStreamingHandle(Handle<Object> source) :
+    IOHandle(source) {
+  HandleScope scope;
+
+  this->path = *String::AsciiValue(source);
+}
+
+LiveStreamingHandle::~LiveStreamingHandle() {
+}
+
+AVFormatContext* transcode::createInputContext(IOHandle* input, int* pret) {
   AVFormatContext* ctx = NULL;
   int ret = 0;
   *pret = 0;
 
-  ret = avformat_open_input(&ctx, path, NULL, NULL);
+  ctx = avformat_alloc_context();
+  if (!ctx) {
+    ret = AVERROR_NOMEM;
+    goto CLEANUP;
+  }
+
+  ctx->pb = input->openRead();
+  if (!ctx->pb) {
+    ret = AVERROR_NOENT;
+    goto CLEANUP;
+  }
+
+  ret = avformat_open_input(&ctx, "", NULL, NULL);
   if (ret < 0) {
     goto CLEANUP;
   }
@@ -56,20 +164,7 @@ CLEANUP:
   return NULL;
 }
 
-AVFormatContext* transcode::createInputContext(
-    InputDescriptor* descr, int* pret) {
-  *pret = 0;
-
-  if (descr->filename) {
-    return createFileInputContext(descr->filename, pret);
-  } else {
-    // Not supported
-    *pret = -1;
-    return NULL;
-  }
-}
-
-AVFormatContext* createFileOutputContext(const char* path, int* pret) {
+AVFormatContext* transcode::createOutputContext(IOHandle* output, int* pret) {
   AVFormatContext* ctx = NULL;
   int ret = 0;
   *pret = 0;
@@ -80,8 +175,9 @@ AVFormatContext* createFileOutputContext(const char* path, int* pret) {
     goto CLEANUP;
   }
 
-  ret = url_fopen(&ctx->pb, path, URL_WRONLY);
-  if (ret < 0) {
+  ctx->pb = output->openWrite();
+  if (!ctx->pb) {
+    ret = AVERROR_NOENT;
     goto CLEANUP;
   }
 
@@ -93,23 +189,4 @@ CLEANUP:
   }
   *pret = ret;
   return NULL;
-}
-
-AVFormatContext* transcode::createOutputContext(
-    OutputDescriptor* descr, int* pret) {
-  *pret = 0;
-
-  if (descr->filename) {
-    return createFileOutputContext(descr->filename, pret);
-  } else {
-    // Not supported
-    *pret = -1;
-    return NULL;
-  }
-}
-
-void transcode::cleanupContext(AVFormatContext* ctx) {
-  if (ctx) {
-    avformat_free_context(ctx);
-  }
 }
