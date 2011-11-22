@@ -1,5 +1,7 @@
 #include "io.h"
+#include <node_buffer.h>
 
+using namespace node;
 using namespace transcode;
 
 IOHandle::IOHandle(Handle<Object> source) {
@@ -32,7 +34,7 @@ FileHandle::FileHandle(Handle<Object> source) :
 FileHandle::~FileHandle() {
 }
 
-AVIOContext* FileHandle::openRead() {
+AVIOContext* FileHandle::OpenRead() {
   AVIOContext* s = NULL;
   int ret = avio_open(&s, this->path.c_str(), AVIO_RDONLY);
   if (ret) {
@@ -41,7 +43,7 @@ AVIOContext* FileHandle::openRead() {
   return s;
 }
 
-AVIOContext* FileHandle::openWrite() {
+AVIOContext* FileHandle::OpenWrite() {
   AVIOContext* s = NULL;
   int ret = avio_open(&s, this->path.c_str(), AVIO_WRONLY);
   if (ret) {
@@ -50,7 +52,7 @@ AVIOContext* FileHandle::openWrite() {
   return s;
 }
 
-void FileHandle::close(AVIOContext* s) {
+void FileHandle::Close(AVIOContext* s) {
   avio_close(s);
 }
 
@@ -59,7 +61,7 @@ StreamHandle::StreamHandle(Handle<Object> source) :
   HandleScope scope;
 
   // TODO: detect if can seek
-  this->canSeek = true;
+  this->canSeek = false;
 }
 
 StreamHandle::~StreamHandle() {
@@ -67,7 +69,7 @@ StreamHandle::~StreamHandle() {
 
 #define STREAM_HANDLE_BUFFER_SIZE (64 * 1024)
 
-AVIOContext* StreamHandle::openRead() {
+AVIOContext* StreamHandle::OpenRead() {
   int bufferSize = STREAM_HANDLE_BUFFER_SIZE;
   uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
   AVIOContext* s = avio_alloc_context(
@@ -78,7 +80,7 @@ AVIOContext* StreamHandle::openRead() {
   return s;
 }
 
-AVIOContext* StreamHandle::openWrite() {
+AVIOContext* StreamHandle::OpenWrite() {
   int bufferSize = STREAM_HANDLE_BUFFER_SIZE;
   uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
   AVIOContext* s = avio_alloc_context(
@@ -89,7 +91,14 @@ AVIOContext* StreamHandle::openWrite() {
   return s;
 }
 
-void StreamHandle::close(AVIOContext* s) {
+void StreamHandle::Close(AVIOContext* s) {
+  HandleScope scope;
+  Local<Object> global = Context::GetCurrent()->Global();
+
+  Local<Function> end =
+      Local<Function>::Cast(this->source->Get(String::New("end")));
+  end->Call(this->source, 0, NULL);
+
   av_free(s);
 }
 
@@ -104,9 +113,30 @@ int StreamHandle::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
 int StreamHandle::WritePacket(void* opaque, uint8_t* buffer, int bufferSize) {
   HandleScope scope;
   StreamHandle* stream = static_cast<StreamHandle*>(opaque);
-  // TODO: write
-  //stream->source->Call()
-  return 0;
+  Local<Object> global = Context::GetCurrent()->Global();
+
+  // TODO: fast buffer
+  // http://sambro.is-super-awesome.com/2011/03/03/creating-a-proper-buffer-in-a-node-c-addon/
+  Buffer* slowBuffer = Buffer::New((char*)buffer, bufferSize);
+  Handle<Value> ctorArgs[3] = {
+      slowBuffer->handle_,
+      Integer::New(bufferSize),
+      Integer::New(0),
+  };
+  Local<Function> bufferCtor =
+      Local<Function>::Cast(global->Get(String::New("Buffer")));
+  Local<Object> actualBuffer =
+      bufferCtor->NewInstance(countof(ctorArgs), ctorArgs);
+
+  Handle<Value> argv[] = {
+    actualBuffer,
+  };
+
+  Local<Function> write =
+      Local<Function>::Cast(stream->source->Get(String::New("write")));
+  write->Call(stream->source, countof(argv), argv);
+
+  return bufferSize;
 }
 
 int64_t StreamHandle::Seek(void* opaque, int64_t offset, int whence) {
@@ -138,7 +168,7 @@ AVFormatContext* transcode::createInputContext(IOHandle* input, int* pret) {
     goto CLEANUP;
   }
 
-  ctx->pb = input->openRead();
+  ctx->pb = input->OpenRead();
   if (!ctx->pb) {
     ret = AVERROR_NOENT;
     goto CLEANUP;
@@ -175,7 +205,7 @@ AVFormatContext* transcode::createOutputContext(IOHandle* output, int* pret) {
     goto CLEANUP;
   }
 
-  ctx->pb = output->openWrite();
+  ctx->pb = output->OpenWrite();
   if (!ctx->pb) {
     ret = AVERROR_NOENT;
     goto CLEANUP;

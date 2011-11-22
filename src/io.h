@@ -16,9 +16,9 @@ public:
 
   static IOHandle* Create(Handle<Object> source);
 
-  virtual AVIOContext* openRead() = 0;
-  virtual AVIOContext* openWrite() = 0;
-  virtual void close(AVIOContext* s) = 0;
+  virtual AVIOContext* OpenRead() = 0;
+  virtual AVIOContext* OpenWrite() = 0;
+  virtual void Close(AVIOContext* s) = 0;
 
 public:
   Persistent<Object>  source;
@@ -29,9 +29,9 @@ public:
   FileHandle(Handle<Object> source);
   virtual ~FileHandle();
 
-  virtual AVIOContext* openRead();
-  virtual AVIOContext* openWrite();
-  virtual void close(AVIOContext* s);
+  virtual AVIOContext* OpenRead();
+  virtual AVIOContext* OpenWrite();
+  virtual void Close(AVIOContext* s);
 
 public:
   std::string     path;
@@ -42,9 +42,9 @@ public:
   StreamHandle(Handle<Object> source);
   virtual ~StreamHandle();
 
-  virtual AVIOContext* openRead();
-  virtual AVIOContext* openWrite();
-  virtual void close(AVIOContext* s);
+  virtual AVIOContext* OpenRead();
+  virtual AVIOContext* OpenWrite();
+  virtual void Close(AVIOContext* s);
 
 private:
 
