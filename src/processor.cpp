@@ -74,6 +74,9 @@ void Processor::Execute(InputDescriptor* input, OutputDescriptor* output,
   this->output = output;
   this->options = options;
 
+  this->obj = Persistent<Object>::New(obj);
+  this->refs = 1;
+
   this->running = true;
 
   ProcessorReq* req = new ProcessorReq();
@@ -252,13 +255,18 @@ void Processor::ThreadWorker(uv_work_t* request) {
     asyncBegin->processor = processor;
     asyncBegin->ictx = ictx;
     asyncBegin->octx = octx;
+    processor->Ref();
     NODE_ASYNC_SEND(asyncBegin, EmitBegin);
   }
 
   // Main pump
   if (!ret) {
+    int64_t startTime = av_gettime();
+    int64_t lastProgressTime = 0;
     Progress progress;
     memset(&progress, 0, sizeof(progress));
+    progress.duration   = ictx->duration / (double)AV_TIME_BASE;
+    double percentDelta = 0;
     while (true) {
       // Copy progress (speeds up queries later on)
       // Also grab the current abort flag
@@ -268,32 +276,76 @@ void Processor::ThreadWorker(uv_work_t* request) {
       pthread_mutex_unlock(&processor->lock);
 
       // Emit progress event
-      ProcessorAsyncProgress* asyncProgress = new ProcessorAsyncProgress();
-      asyncProgress->processor = processor;
-      memcpy(&asyncProgress->progress, &progress, sizeof(progress));
-      NODE_ASYNC_SEND(asyncProgress, EmitProgress);
+      int64_t currentTime = av_gettime();
+      bool emitProgress =
+        (currentTime - lastProgressTime > 1 * 1000000) ||
+        (percentDelta > 0.01);
+      if (emitProgress) {
+        lastProgressTime = currentTime;
+        percentDelta = 0;
+
+        ProcessorAsyncProgress* asyncProgress = new ProcessorAsyncProgress();
+        asyncProgress->processor = processor;
+        memcpy(&asyncProgress->progress, &progress, sizeof(progress));
+        processor->Ref();
+        NODE_ASYNC_SEND(asyncProgress, EmitProgress);
+      }
 
       // TODO: work
-      break;
+      AVPacket packet;
+      int decode_done = av_read_frame(ictx, &packet);
+      if (decode_done < 0) {
+        break;
+      }
 
-      if (!ret || aborting) {
+      // Update progress (as best we can)
+      // TODO: times/etc
+      AVStream* stream = ictx->streams[packet.stream_index];
+      double oldPercent = progress.timestamp / progress.duration;
+      progress.timestamp  = packet.pts / (double)stream->time_base.den;
+      percentDelta += (progress.timestamp / progress.duration) - oldPercent;
+
+      if (av_dup_packet(&packet) < 0) {
+        fprintf(stderr, "Could not duplicate packet");
+        av_free_packet(&packet);
+        break;
+      }
+
+      ret = av_interleaved_write_frame(octx, &packet);
+      if (ret < 0) {
+        fprintf(stderr, "Warning: Could not write frame of stream\n");
+      } else if (ret > 0) {
+        fprintf(stderr, "End of stream requested\n");
+        av_free_packet(&packet);
+        break;
+      }
+
+      av_free_packet(&packet);
+
+      if (ret || aborting) {
         // Error occurred or abort requested - early exit
         break;
       }
     };
   }
 
+  av_write_trailer(octx);
+  avio_flush(octx->pb);
+  url_fclose(octx->pb);
+
   // Emit error
   if (ret) {
     ProcessorAsyncError* asyncError = new ProcessorAsyncError();
     asyncError->processor = processor;
     asyncError->err = ret;
+    processor->Ref();
     NODE_ASYNC_SEND(asyncError, EmitError);
   }
 
   // Emit end
   ProcessorAsyncEnd* asyncEnd = new ProcessorAsyncEnd();
   asyncEnd->processor = processor;
+  processor->Ref();
   NODE_ASYNC_SEND(asyncEnd, EmitEnd);
 }
 
@@ -305,6 +357,8 @@ void Processor::ThreadWorkerComplete(uv_work_t* request) {
 
   req->obj.Dispose();
   delete req;
+
+  processor->Unref();
 }
 
 void Processor::EmitBegin(uv_async_t* handle, int status) {
@@ -320,6 +374,8 @@ void Processor::EmitBegin(uv_async_t* handle, int status) {
 void Processor::EmitBeginClose(uv_handle_t* handle) {
   ProcessorAsyncBegin* req =
       static_cast<ProcessorAsyncBegin*>(handle->data);
+  req->processor->Unref();
+  delete req;
   handle->data = NULL;
 }
 
@@ -336,6 +392,8 @@ void Processor::EmitProgress(uv_async_t* handle, int status) {
 void Processor::EmitProgressClose(uv_handle_t* handle) {
   ProcessorAsyncProgress* req =
       static_cast<ProcessorAsyncProgress*>(handle->data);
+  req->processor->Unref();
+  delete req;
   handle->data = NULL;
 }
 
@@ -352,6 +410,8 @@ void Processor::EmitError(uv_async_t* handle, int status) {
 void Processor::EmitErrorClose(uv_handle_t* handle) {
   ProcessorAsyncError* req =
       static_cast<ProcessorAsyncError*>(handle->data);
+  req->processor->Unref();
+  delete req;
   handle->data = NULL;
 }
 
@@ -368,7 +428,25 @@ void Processor::EmitEnd(uv_async_t* handle, int status) {
 void Processor::EmitEndClose(uv_handle_t* handle) {
   ProcessorAsyncEnd* req =
       static_cast<ProcessorAsyncEnd*>(handle->data);
+  req->processor->Unref();
+  delete req;
   handle->data = NULL;
+}
+
+void Processor::Ref() {
+  pthread_mutex_lock(&this->lock);
+  this->refs++;
+  pthread_mutex_unlock(&this->lock);
+}
+
+void Processor::Unref() {
+  pthread_mutex_lock(&this->lock);
+  this->refs--;
+  pthread_mutex_unlock(&this->lock);
+  if (!this->refs) {
+    this->obj.Dispose();
+    this->obj.Clear();
+  }
 }
 
 Progress Processor::GetProgress() {

@@ -94,15 +94,15 @@ Handle<Value> Task::GetProgressInternal(Progress* progress) {
   result->Set(_task_timestamp_symbol,
       Number::New(progress->timestamp));
   result->Set(_task_duration_symbol,
-      Number::New(progress->timestamp));
+      Number::New(progress->duration));
   result->Set(_task_timeElapsed_symbol,
-      Number::New(progress->timestamp));
+      Number::New(progress->timeElapsed));
   result->Set(_task_timeEstimated_symbol,
-      Number::New(progress->timestamp));
+      Number::New(progress->timeEstimated));
   result->Set(_task_timeRemaining_symbol,
-      Number::New(progress->timestamp));
+      Number::New(progress->timeRemaining));
   result->Set(_task_timeMultiplier_symbol,
-      Number::New(progress->timestamp));
+      Number::New(progress->timeMultiplier));
 
   return scope.Close(result);
 }

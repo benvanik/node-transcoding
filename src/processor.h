@@ -52,8 +52,12 @@ public:
   void Abort();
 
 private:
+  void Ref();
+  void Unref();
+
   static AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
       int* pret);
+
   static void ThreadWorker(uv_work_t* request);
   static void ThreadWorkerComplete(uv_work_t* request);
 
@@ -67,6 +71,7 @@ private:
   static void EmitEndClose(uv_handle_t* handle);
 
 private:
+  Persistent<Object>  obj;
   ProcessorSink*      sink;
   pthread_mutex_t     lock;
 
@@ -75,6 +80,7 @@ private:
   // All guarded by lock
   bool                running;
   bool                abort;
+  int                 refs;
   InputDescriptor*    input;
   OutputDescriptor*   output;
   ProcessorOptions*   options;
