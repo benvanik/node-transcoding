@@ -3,28 +3,6 @@
 using namespace transcode;
 using namespace v8;
 
-static inline std::string V8GetString(Handle<Object> obj, const char* name,
-    std::string& original) {
-  HandleScope scope;
-  Local<String> value = Local<String>::Cast(obj->Get(String::NewSymbol(name)));
-  if (value.IsEmpty()) {
-    return original;
-  } else {
-    return *String::AsciiValue(value);
-  }
-}
-
-static inline double V8GetNumber(Handle<Object> obj, const char* name,
-    double original) {
-  HandleScope scope;
-  Local<Number> value = Local<Number>::Cast(obj->Get(String::NewSymbol(name)));
-  if (value.IsEmpty()) {
-    return original;
-  } else {
-    return value->Value();
-  }
-}
-
 CodecOptions::CodecOptions(Handle<Object> source) :
     codec(""), profileId(FF_PROFILE_UNKNOWN), profileLevel(FF_LEVEL_UNKNOWN),
     bitrate(0) {

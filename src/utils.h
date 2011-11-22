@@ -39,6 +39,30 @@ do {                                                                      \
     uv_close((uv_handle_t*)handle, name); \
   } while(0);
 
+static std::string V8GetString(v8::Handle<v8::Object> obj, const char* name,
+    std::string& original) {
+  v8::HandleScope scope;
+  v8::Local<v8::String> value =
+      v8::Local<v8::String>::Cast(obj->Get(v8::String::NewSymbol(name)));
+  if (value.IsEmpty()) {
+    return original;
+  } else {
+    return *v8::String::AsciiValue(value);
+  }
+}
+
+static double V8GetNumber(v8::Handle<v8::Object> obj, const char* name,
+    double original) {
+  v8::HandleScope scope;
+  v8::Local<v8::Number> value =
+      v8::Local<v8::Number>::Cast(obj->Get(v8::String::NewSymbol(name)));
+  if (value.IsEmpty()) {
+    return original;
+  } else {
+    return value->Value();
+  }
+}
+
 }; // transcode
 
 #endif // NODE_TRANSCODE_UTILS
