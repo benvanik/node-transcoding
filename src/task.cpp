@@ -72,6 +72,14 @@ Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
 }
 
 Task::~Task() {
+  assert(!this->context);
+
+  this->source.Dispose();
+  this->target.Dispose();
+  this->profile.Dispose();
+  this->options.Dispose();
+
+  printf("task dtor\n");
 }
 
 Handle<Value> Task::GetSource(Local<String> property,

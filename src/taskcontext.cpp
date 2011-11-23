@@ -26,6 +26,8 @@ TaskContext::~TaskContext() {
   delete this->input;
   delete this->output;
   delete this->profile;
+
+  printf("taskcontext dtor\n");
 }
 
 Progress TaskContext::GetProgress() {
