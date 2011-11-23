@@ -1,6 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
+#include "io.h"
 #include "profile.h"
 
 #ifndef NODE_TRANSCODE_TASK
@@ -18,6 +19,31 @@ typedef struct Progress_t {
   double    timeRemaining;
   double    timeMultiplier;
 } Progress;
+
+class TaskContext {
+public:
+  TaskContext(IOHandle* input, IOHandle* output, Profile* profile);
+  ~TaskContext();
+
+  Progress GetProgress();
+  void Abort();
+
+public:
+  pthread_mutex_t     lock;
+
+  bool                running;
+  bool                abort;
+
+  IOHandle*           input;
+  IOHandle*           output;
+  Profile*            profile;
+  // options
+
+  Progress            progress;
+
+  AVFormatContext*    ictx;
+  AVFormatContext*    octx;
+};
 
 class Task : public node::ObjectWrap {
 public:
@@ -44,19 +70,22 @@ public:
   static Handle<Value> Stop(const Arguments& args);
 
 public:
-  virtual void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx);
-  virtual void EmitProgress(Progress progress);
-  virtual void EmitError(int err);
-  virtual void EmitEnd();
+  void EmitBegin(AVFormatContext* ictx, AVFormatContext* octx);
+  void EmitProgress(Progress progress);
+  void EmitError(int err);
+  void EmitEnd();
+  void Complete();
 
 private:
   Handle<Value> GetProgressInternal(Progress* progress);
 
 private:
-  Persistent<Object>      source;
-  Persistent<Object>      target;
-  Persistent<Object>      profile;
-  Persistent<Object>      options;
+  Persistent<Object>  source;
+  Persistent<Object>  target;
+  Persistent<Object>  profile;
+  Persistent<Object>  options;
+
+  TaskContext*        context;
 };
 
 }; // transcode

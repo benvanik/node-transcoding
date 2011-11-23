@@ -39,13 +39,18 @@ VideoCodecOptions::~VideoCodecOptions() {
 }
 
 Profile::Profile(Handle<Object> source) :
-    container("mpegts") {
+    name("unknown"), container("mpegts") {
   HandleScope scope;
 
-  this->container = V8GetString(source, "container", this->container);
+  this->name = V8GetString(source, "name", this->name);
 
-  Local<Object> audio = Local<Object>::Cast(source->Get(String::New("audio")));
-  Local<Object> video = Local<Object>::Cast(source->Get(String::New("video")));
+  Local<Object> options =
+      Local<Object>::Cast(source->Get(String::New("options")));
+
+  this->container = V8GetString(options, "container", this->container);
+
+  Local<Object> audio = Local<Object>::Cast(options->Get(String::New("audio")));
+  Local<Object> video = Local<Object>::Cast(options->Get(String::New("video")));
   if (!audio.IsEmpty()) {
     if (audio->IsArray()) {
       Local<Array> audios = Local<Array>::Cast(audio);

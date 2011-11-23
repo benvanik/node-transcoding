@@ -53,7 +53,8 @@ Handle<Value> Task::New(const Arguments& args)
 }
 
 Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
-    Handle<Object> options) {
+    Handle<Object> options) :
+    context(NULL) {
   HandleScope scope;
 
   this->source = Persistent<Object>::New(source);
@@ -119,17 +120,28 @@ Handle<Value> Task::GetProgress(Local<String> property,
   Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
 
-  //Progress progress = task->processor.GetProgress();
-  Progress progress;
-
-  return scope.Close(task->GetProgressInternal(&progress));
+  if (task->context) {
+    Progress progress = task->context->GetProgress();
+    return scope.Close(task->GetProgressInternal(&progress));
+  } else {
+    return scope.Close(Null());
+  }
 }
 
 Handle<Value> Task::Start(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  // TODO: exec
+  assert(!task->context);
+
+  IOHandle* input = IOHandle::Create(task->source);
+  IOHandle* output = IOHandle::Create(task->target);
+  Profile* profile = new Profile(task->profile);
+  task->context = new TaskContext(input, output, profile);
+
+  // Kickoff
+  task->Ref();
+  // TODO: start thread
 
   return scope.Close(Undefined());
 }
@@ -138,7 +150,9 @@ Handle<Value> Task::Stop(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  // TODO: abort
+  if (task->context) {
+    task->context->Abort();
+  }
 
   return scope.Close(Undefined());
 }
@@ -187,4 +201,52 @@ void Task::EmitEnd() {
     String::New("end"),
   };
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
+}
+
+void Task::Complete() {
+  assert(this->context);
+
+  this->Unref();
+
+  delete this->context;
+  this->context = NULL;
+}
+
+TaskContext::TaskContext(IOHandle* input, IOHandle* output, Profile* profile) :
+    running(true), abort(false),
+    input(input), output(output), profile(profile),
+    ictx(NULL), octx(NULL) {
+  pthread_mutex_init(&this->lock, NULL);
+
+  memset(&this->progress, 0, sizeof(this->progress));
+}
+
+TaskContext::~TaskContext() {
+  assert(!this->running);
+
+  pthread_mutex_destroy(&this->lock);
+
+  if (this->ictx) {
+    avformat_free_context(this->ictx);
+  }
+  if (this->octx) {
+    avformat_free_context(this->octx);
+  }
+
+  delete this->input;
+  delete this->output;
+  delete this->profile;
+}
+
+Progress TaskContext::GetProgress() {
+  pthread_mutex_lock(&this->lock);
+  Progress progress = this->progress;
+  pthread_mutex_unlock(&this->lock);
+  return progress;
+}
+
+void TaskContext::Abort() {
+  pthread_mutex_lock(&this->lock);
+  this->abort = true;
+  pthread_mutex_unlock(&this->lock);
 }

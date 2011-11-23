@@ -55,8 +55,7 @@ if (!path.existsSync(outputPath)) {
 
 console.log('transcoding ' + inputFile + ' -> ' + outputFile);
 
-var task = transcode.createTask(inputFile, outputFile, {
-  profile: profile
+var task = transcode.createTask(inputFile, outputFile, profile, {
 });
 task.on('begin', function(sourceInfo, targetInfo) {
   // Transcoding beginning

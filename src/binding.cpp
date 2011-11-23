@@ -47,6 +47,8 @@ static Handle<Value> queryInfo(const Arguments& args) {
     //av_dump_format(ctx, 0, NULL, 0);
     Local<Object> result = Local<Object>::New(createMediaInfo(ctx, false));
 
+    avformat_free_context(ctx);
+
     Handle<Value> argv[] = {
       Undefined(),
       result,

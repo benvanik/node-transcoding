@@ -43,6 +43,8 @@ public:
   Profile(Handle<Object> source);
   ~Profile();
 
+  std::string                     name;
+
   std::string                     container;
 
   std::vector<AudioCodecOptions*> audioCodecs;
