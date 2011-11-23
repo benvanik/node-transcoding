@@ -39,4 +39,5 @@ def build(bld):
     'src/mediainfo.cpp',
     'src/profile.cpp',
     'src/task.cpp',
+    'src/taskcontext.cpp',
   ]

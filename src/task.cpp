@@ -4,6 +4,14 @@
 using namespace transcode;
 using namespace v8;
 
+typedef struct TaskAsyncRequest_t {
+  uv_async_t      req;
+  Task*           task;
+  union {
+    Progress      progress;
+  };
+} TaskAsyncRequest;
+
 static Persistent<String> _task_timestamp_symbol;
 static Persistent<String> _task_duration_symbol;
 static Persistent<String> _task_timeElapsed_symbol;
@@ -134,14 +142,34 @@ Handle<Value> Task::Start(const Arguments& args) {
 
   assert(!task->context);
 
+  // Setup context
   IOHandle* input = IOHandle::Create(task->source);
   IOHandle* output = IOHandle::Create(task->target);
   Profile* profile = new Profile(task->profile);
-  task->context = new TaskContext(input, output, profile);
+  TaskContext* context = new TaskContext(input, output, profile);
 
-  // Kickoff
+  // Prepare the input/output (done on the main thread to make things easier)
+  int ret = context->Prepare();
+  if (ret) {
+    delete context;
+    task->EmitError(ret);
+    return scope.Close(Undefined());
+  }
+  //task->EmitBegin(context->ictx, context->octx);
+
+  printf("pre launch\n");
+
+  // Prepare thread request
+  uv_work_t* req = new uv_work_t();
+  req->data = task;
   task->Ref();
-  // TODO: start thread
+  task->context = context;
+
+  // Start thread
+  int status = uv_queue_work(uv_default_loop(), req, ThreadWorker, NULL);
+  assert(status == 0);
+
+  printf("post launch\n");
 
   return scope.Close(Undefined());
 }
@@ -203,50 +231,117 @@ void Task::EmitEnd() {
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
 
-void Task::Complete() {
-  assert(this->context);
+void Task::EmitProgressAsync(uv_async_t* handle, int status) {
+  assert(status == 0);
+  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
 
-  this->Unref();
+  req->task->EmitProgress(req->progress);
 
-  delete this->context;
-  this->context = NULL;
+  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
 }
 
-TaskContext::TaskContext(IOHandle* input, IOHandle* output, Profile* profile) :
-    running(true), abort(false),
-    input(input), output(output), profile(profile),
-    ictx(NULL), octx(NULL) {
-  pthread_mutex_init(&this->lock, NULL);
+void Task::EmitCompleteAsync(uv_async_t* handle, int status) {
+  assert(status == 0);
+  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
+  Task* task = req->task;
+  TaskContext* context = task->context;
+  assert(context);
 
-  memset(&this->progress, 0, sizeof(this->progress));
-}
+  printf("complete\n");
 
-TaskContext::~TaskContext() {
-  assert(!this->running);
-
-  pthread_mutex_destroy(&this->lock);
-
-  if (this->ictx) {
-    avformat_free_context(this->ictx);
+  // Always fire one last progress event
+  if (!context->err) {
+    context->progress.timestamp = context->progress.duration;
+    context->progress.timeRemaining = 0;
   }
-  if (this->octx) {
-    avformat_free_context(this->octx);
+  task->EmitProgress(context->progress);
+
+  assert(context->running);
+  context->running = false;
+  int err = context->err;
+
+  delete task->context;
+  task->context = NULL;
+
+  if (err) {
+    task->EmitError(err);
+  } else {
+    task->EmitEnd();
   }
 
-  delete this->input;
-  delete this->output;
-  delete this->profile;
+  task->Unref();
+
+  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
 }
 
-Progress TaskContext::GetProgress() {
-  pthread_mutex_lock(&this->lock);
-  Progress progress = this->progress;
-  pthread_mutex_unlock(&this->lock);
-  return progress;
+void Task::AsyncHandleClose(uv_handle_t* handle) {
+  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
+  delete req;
+  handle->data = NULL;
 }
 
-void TaskContext::Abort() {
-  pthread_mutex_lock(&this->lock);
-  this->abort = true;
-  pthread_mutex_unlock(&this->lock);
+void Task::ThreadWorker(uv_work_t* request) {
+  Task* task = static_cast<Task*>(request->data);
+  TaskContext* context = task->context;
+  assert(context);
+
+  int64_t startTime = av_gettime();
+  int64_t lastProgressTime = 0;
+  Progress progress;
+  memset(&progress, 0, sizeof(progress));
+  //progress.duration   = context->ictx->duration / (double)AV_TIME_BASE;
+  double percentDelta = 0;
+
+  printf("PRE\n");
+
+  TaskAsyncRequest* asyncReq;
+  int ret = 0;
+  bool aborting = false;
+  do {
+    // Copy progress (speeds up queries later on)
+    // Also grab the current abort flag
+    pthread_mutex_lock(&context->lock);
+    aborting = context->abort;
+    memcpy(&context->progress, &progress, sizeof(progress));
+    pthread_mutex_unlock(&context->lock);
+
+    // Emit progress event, if needed
+    int64_t currentTime = av_gettime();
+    bool emitProgress =
+        (currentTime - lastProgressTime > 1 * 1000000) ||
+        (percentDelta > 0.01);
+    if (emitProgress) {
+      lastProgressTime = currentTime;
+      percentDelta = 0;
+
+      asyncReq = new TaskAsyncRequest();
+      asyncReq->req.data = asyncReq;
+      asyncReq->task = task;
+      asyncReq->progress = context->progress;
+      uv_async_init(uv_default_loop(), &asyncReq->req, EmitProgressAsync);
+      uv_async_send(&asyncReq->req);
+    }
+
+    // Perform some work
+    printf("PUMP->\n");
+    bool finished = context->Pump(&ret);
+    printf("->PUMP\n");
+
+    if (finished) {
+      // ?
+      break;
+    }
+  } while (!ret && !aborting);
+
+  // Complete
+  // Note that we fire this instead of doing it in the worker complete so that
+  // all progress events will get dispatched prior to this
+  asyncReq = new TaskAsyncRequest();
+  asyncReq->req.data = asyncReq;
+  asyncReq->task = task;
+  asyncReq->progress = context->progress;
+  uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
+  uv_async_send(&asyncReq->req);
+
+  printf("POST %d\n", context->err);
 }

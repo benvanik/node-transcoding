@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "io.h"
 #include "profile.h"
+#include "taskcontext.h"
 
 #ifndef NODE_TRANSCODE_TASK
 #define NODE_TRANSCODE_TASK
@@ -10,40 +11,6 @@
 using namespace v8;
 
 namespace transcode {
-
-typedef struct Progress_t {
-  double    timestamp;
-  double    duration;
-  double    timeElapsed;
-  double    timeEstimated;
-  double    timeRemaining;
-  double    timeMultiplier;
-} Progress;
-
-class TaskContext {
-public:
-  TaskContext(IOHandle* input, IOHandle* output, Profile* profile);
-  ~TaskContext();
-
-  Progress GetProgress();
-  void Abort();
-
-public:
-  pthread_mutex_t     lock;
-
-  bool                running;
-  bool                abort;
-
-  IOHandle*           input;
-  IOHandle*           output;
-  Profile*            profile;
-  // options
-
-  Progress            progress;
-
-  AVFormatContext*    ictx;
-  AVFormatContext*    octx;
-};
 
 class Task : public node::ObjectWrap {
 public:
@@ -74,7 +41,12 @@ public:
   void EmitProgress(Progress progress);
   void EmitError(int err);
   void EmitEnd();
-  void Complete();
+
+  static void EmitProgressAsync(uv_async_t* handle, int status);
+  static void EmitCompleteAsync(uv_async_t* handle, int status);
+  static void AsyncHandleClose(uv_handle_t* handle);
+
+  static void ThreadWorker(uv_work_t* request);
 
 private:
   Handle<Value> GetProgressInternal(Progress* progress);
