@@ -6,9 +6,17 @@ using namespace v8;
 Handle<Object> transcoding::createMediaInfo(AVFormatContext* ctx, bool encoding) {
   HandleScope scope;
 
+  // Lop off just the first container name
+  // e.g., mov,mp4,m4a.... -> mov
+  char container[256];
+  strcpy(container, encoding ? ctx->oformat->name : ctx->iformat->name);
+  char* containerHead = strchr(container, ',');
+  if (containerHead) {
+    *containerHead = 0;
+  }
+
   Local<Object> result = Object::New();
-  result->Set(String::New("container"),
-      String::New(encoding ? ctx->oformat->name : ctx->iformat->name));
+  result->Set(String::New("container"), String::New(container));
   if (ctx->duration != AV_NOPTS_VALUE) {
     result->Set(String::New("duration"),
         Number::New(ctx->duration / (double)AV_TIME_BASE));
