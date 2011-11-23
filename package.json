@@ -1,24 +1,26 @@
 {
-  "name": "transcode",
+  "name": "transcoding",
   "description": "Media transcoding and streaming support",
   "version": "0.0.1",
   "author": "Ben Vanik <ben.vanik@gmail.com>",
   "contributors": [],
   "repository": {
     "type": "git",
-    "url": "git://github.com/benvanik/node-transcode.git"
+    "url": "git://github.com/benvanik/node-transcoding.git"
   },
   "keywords": [
     "audio",
     "video",
     "media",
     "transcode",
+    "transcoding",
+    "remux",
     "streaming"
   ],
   "directories": {
-    "lib": "./lib/transcode"
+    "lib": "./lib/transcoding"
   },
-  "main": "./lib/transcode",
+  "main": "./lib/transcoding",
   "bin": {
     "transcode" : "./examples/transcode.js"
   },

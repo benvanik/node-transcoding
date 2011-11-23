@@ -4,12 +4,12 @@
 #include "io.h"
 #include "profile.h"
 
-#ifndef NODE_TRANSCODE_TASKCONTEXT
-#define NODE_TRANSCODE_TASKCONTEXT
+#ifndef NODE_TRANSCODING_TASKCONTEXT
+#define NODE_TRANSCODING_TASKCONTEXT
 
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 typedef struct Progress_t {
   double    timestamp;
@@ -52,6 +52,6 @@ public:
   AVFormatContext*    octx;
 };
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_TASKCONTEXT
+#endif // NODE_TRANSCODING_TASKCONTEXT

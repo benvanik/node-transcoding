@@ -2,7 +2,7 @@
 
 var fs = require('fs');
 var path = require('path');
-var transcode = require('transcode');
+var transcoding = require('transcoding');
 var util = require('util');
 
 var opts = require('tav').set({
@@ -19,7 +19,7 @@ if (!path.existsSync(inputFile)) {
   return;
 }
 
-transcode.queryInfo(inputFile, function(err, info) {
+transcoding.queryInfo(inputFile, function(err, info) {
   console.log('Info for ' + inputFile + ':');
   if (err) {
     console.log('Error!');

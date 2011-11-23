@@ -5,12 +5,12 @@
 #include "profile.h"
 #include "taskcontext.h"
 
-#ifndef NODE_TRANSCODE_TASK
-#define NODE_TRANSCODE_TASK
+#ifndef NODE_TRANSCODING_TASK
+#define NODE_TRANSCODING_TASK
 
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 class Task : public node::ObjectWrap {
 public:
@@ -61,6 +61,6 @@ private:
   Progress            progress;
 };
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_TASK
+#endif // NODE_TRANSCODING_TASK

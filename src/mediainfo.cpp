@@ -1,9 +1,9 @@
 #include "mediainfo.h"
 
-using namespace transcode;
+using namespace transcoding;
 using namespace v8;
 
-Handle<Object> transcode::createMediaInfo(AVFormatContext* ctx, bool encoding) {
+Handle<Object> transcoding::createMediaInfo(AVFormatContext* ctx, bool encoding) {
   HandleScope scope;
 
   Local<Object> result = Object::New();

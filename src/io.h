@@ -2,12 +2,12 @@
 #include <v8.h>
 #include "utils.h"
 
-#ifndef NODE_TRANSCODE_IO
-#define NODE_TRANSCODE_IO
+#ifndef NODE_TRANSCODING_IO
+#define NODE_TRANSCODING_IO
 
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 class IOHandle {
 public:
@@ -71,6 +71,6 @@ public:
 AVFormatContext* createInputContext(IOHandle* input, int* pret);
 AVFormatContext* createOutputContext(IOHandle* output, int* pret);
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_IO
+#endif // NODE_TRANSCODING_IO

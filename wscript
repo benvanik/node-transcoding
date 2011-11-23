@@ -30,7 +30,7 @@ def configure(conf):
 
 def build(bld):
   t = bld.new_task_gen('cxx', 'shlib', 'node_addon')
-  t.target = 'node_transcode'
+  t.target = 'node_transcoding'
   t.cxxflags = ['-D__STDC_CONSTANT_MACROS']
   t.uselib = ['LIBAVUTIL', 'LIBAVFORMAT', 'LIBAVCODEC']
   t.source = [

@@ -2,7 +2,7 @@
 #include <node_buffer.h>
 
 using namespace node;
-using namespace transcode;
+using namespace transcoding;
 
 IOHandle::IOHandle(Handle<Object> source) {
   HandleScope scope;
@@ -157,7 +157,7 @@ LiveStreamingHandle::LiveStreamingHandle(Handle<Object> source) :
 LiveStreamingHandle::~LiveStreamingHandle() {
 }
 
-AVFormatContext* transcode::createInputContext(IOHandle* input, int* pret) {
+AVFormatContext* transcoding::createInputContext(IOHandle* input, int* pret) {
   AVFormatContext* ctx = NULL;
   int ret = 0;
   *pret = 0;
@@ -194,7 +194,7 @@ CLEANUP:
   return NULL;
 }
 
-AVFormatContext* transcode::createOutputContext(IOHandle* output, int* pret) {
+AVFormatContext* transcoding::createOutputContext(IOHandle* output, int* pret) {
   AVFormatContext* ctx = NULL;
   int ret = 0;
   *pret = 0;

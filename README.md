@@ -1,7 +1,7 @@
-node-transcode -- Media transcoding and streaming for node.js
+node-transcoding -- Media transcoding and streaming for node.js
 ====================================
 
-node-transcode is a library for enabling both offline and real-time media
+node-transcoding is a library for enabling both offline and real-time media
 transcoding. In addition to enabling the manipulation of the input media,
 utilities are provided to ease serving of the output.
 
@@ -15,11 +15,11 @@ Coming soon (maybe):
 
 ## Quickstart
 
-    npm install transcode
+    npm install transcoding
     node
-    > var transcode = require('transcode');
-    > transcode.process('input.flv', 'output.m4v',
-        transcode.profiles.APPLE_TV_2, function(err, sourceInfo, targetInfo) {
+    > var transcoding = require('transcoding');
+    > transcoding.process('input.flv', 'output.m4v',
+        transcoding.profiles.APPLE_TV_2, function(err, sourceInfo, targetInfo) {
           console.log('completed!');
         });
 
@@ -27,17 +27,17 @@ Coming soon (maybe):
 
 With [npm](http://npmjs.org):
 
-    npm install transcode
+    npm install transcoding
 
 From source:
 
     cd ~
-    git clone https://benvanik@github.com/benvanik/node-transcode.git
-    npm link node-transcode/
+    git clone https://benvanik@github.com/benvanik/node-transcoding.git
+    npm link node-transcoding/
 
 ### Dependencies
 
-node-transcode requires `ffmpeg` and its libraries `avformat` and `avcodec`.
+node-transcoding requires `ffmpeg` and its libraries `avformat` and `avcodec`.
 Make sure it's installed and on your path. It must be compiled with libx264 to
 support most output - note that some distributions don't include this and you
 may have to compile it yourself. Annoying, I know.
@@ -120,8 +120,8 @@ for undefined first.
 To quickly query media information (duration, codecs used, etc) use the
 `queryInfo` API:
 
-    var transcode = require('transcode');
-    transcode.queryInfo(source, function(err, info) {
+    var transcoding = require('transcoding');
+    transcoding.queryInfo(source, function(err, info) {
       // Completed
     });
 
@@ -131,9 +131,9 @@ Transcoding requires a ton of parameters to get the best results. It's a pain in
 the ass. So what's exposed right now is a profile set that tries to set the
 best options for you. Pick your profile and pass it into the transcoding APIs.
 
-    var transcode = require('transcode');
-    for (var profileName in transcode.profiles) {
-      var profile = transcode.profiles[profileName];
+    var transcoding = require('transcoding');
+    for (var profileName in transcoding.profiles) {
+      var profile = transcoding.profiles[profileName];
       console.log(profileName + ':' + util.inspect(profile));
     }
 
@@ -142,8 +142,8 @@ best options for you. Pick your profile and pass it into the transcoding APIs.
 If you are doing simple offline transcoding (no need for streaming, extra
 options, progress updates, etc) then you can use the `process` API:
 
-    var transcode = require('transcode');
-    transcode.process(source, target, transcode.profiles.APPLE_TV_2, {}, function(err, sourceInfo, targetInfo) {
+    var transcoding = require('transcoding');
+    transcoding.process(source, target, transcoding.profiles.APPLE_TV_2, {}, function(err, sourceInfo, targetInfo) {
       // Completed
     });
 
@@ -152,8 +152,8 @@ track events.
 
 ### Advanced Transcoding
 
-    var transcode = require('transcode');
-    var task = transcode.createTask(source, target, transcode.profiles.APPLE_TV_2);
+    var transcoding = require('transcoding');
+    var task = transcoding.createTask(source, target, transcoding.profiles.APPLE_TV_2);
 
     task.on('begin', function(sourceInfo, targetInfo) {
       // Transcoding beginning, info available
@@ -201,7 +201,7 @@ things such as client-side stream switching (changing audio channels/etc).
 
     // TODO: API for this... something like:
     // (where target is used as a base filename for all the extra stuff)
-    var task = transcode.createTask(source, target, profile, {
+    var task = transcoding.createTask(source, target, profile, {
       streaming: {
         segmentDuration: 10,
         allowCaching: true

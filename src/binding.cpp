@@ -5,10 +5,10 @@
 #include "mediainfo.h"
 #include "task.h"
 
-using namespace transcode;
+using namespace transcoding;
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 static Handle<Value> setDebugLevel(const Arguments& args) {
   HandleScope scope;
@@ -61,19 +61,19 @@ static Handle<Value> queryInfo(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
-}; // transcode
+}; // transcoding
 
-extern "C" void node_transcode_init(Handle<Object> target) {
+extern "C" void node_transcoding_init(Handle<Object> target) {
   HandleScope scope;
 
   // One-time prep
   av_register_all();
   av_log_set_level(AV_LOG_QUIET);
 
-  transcode::Task::Init(target);
+  transcoding::Task::Init(target);
 
-  NODE_SET_METHOD(target, "setDebugLevel", transcode::setDebugLevel);
-  NODE_SET_METHOD(target, "queryInfo", transcode::queryInfo);
+  NODE_SET_METHOD(target, "setDebugLevel", transcoding::setDebugLevel);
+  NODE_SET_METHOD(target, "queryInfo", transcoding::queryInfo);
 }
 
-NODE_MODULE(node_transcode, node_transcode_init);
+NODE_MODULE(node_transcoding, node_transcoding_init);

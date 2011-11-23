@@ -1,7 +1,7 @@
 #include "task.h"
 #include "mediainfo.h"
 
-using namespace transcode;
+using namespace transcoding;
 using namespace v8;
 
 typedef struct TaskAsyncRequest_t {

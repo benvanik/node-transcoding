@@ -2,7 +2,7 @@
 
 var fs = require('fs');
 var path = require('path');
-var transcode = require('transcode');
+var transcoding = require('transcoding');
 var util = require('util');
 
 var opts = require('tav').set({
@@ -14,8 +14,8 @@ var opts = require('tav').set({
 
 if (!opts.args.length) {
   console.log('All profiles:');
-  for (var key in transcode.profiles) {
-    var profile = transcode.profiles[key];
+  for (var key in transcoding.profiles) {
+    var profile = transcoding.profiles[key];
     console.log('  ' + key + ': ' + profile.name);
   }
   return;
@@ -34,14 +34,14 @@ if (!path.existsSync(inputFile)) {
 
 if (opts.args.length < 2) {
   // No output given, so just query info
-  transcode.queryInfo(inputFile, function(err, info) {
+  transcoding.queryInfo(inputFile, function(err, info) {
     console.log('Info for ' + inputFile + ':');
     console.log(util.inspect(info, false, 3));
   });
   return;
 }
 
-var profile = transcode.profiles[opts['profile']];
+var profile = transcoding.profiles[opts['profile']];
 if (!profile) {
   console.log('unknown profile: ' + profile);
   return;
@@ -55,7 +55,7 @@ if (!path.existsSync(outputPath)) {
 
 console.log('transcoding ' + inputFile + ' -> ' + outputFile);
 
-var task = transcode.createTask(inputFile, outputFile, profile, {
+var task = transcoding.createTask(inputFile, outputFile, profile, {
 });
 task.on('begin', function(sourceInfo, targetInfo) {
   // Transcoding beginning

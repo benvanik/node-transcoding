@@ -4,12 +4,12 @@
 #include <vector>
 #include "utils.h"
 
-#ifndef NODE_TRANSCODE_PROFILE
-#define NODE_TRANSCODE_PROFILE
+#ifndef NODE_TRANSCODING_PROFILE
+#define NODE_TRANSCODING_PROFILE
 
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 class CodecOptions {
 public:
@@ -51,6 +51,6 @@ public:
   std::vector<VideoCodecOptions*> videoCodecs;
 };
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_PROFILE
+#endif // NODE_TRANSCODING_PROFILE

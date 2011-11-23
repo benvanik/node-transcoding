@@ -1,6 +1,6 @@
 #include "taskcontext.h"
 
-using namespace transcode;
+using namespace transcoding;
 
 TaskContext::TaskContext(IOHandle* input, IOHandle* output, Profile* profile) :
     running(false), abort(false), err(0),

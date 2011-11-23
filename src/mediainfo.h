@@ -2,15 +2,15 @@
 #include <v8.h>
 #include "utils.h"
 
-#ifndef NODE_TRANSCODE_MEDIAINFO
-#define NODE_TRANSCODE_MEDIAINFO
+#ifndef NODE_TRANSCODING_MEDIAINFO
+#define NODE_TRANSCODING_MEDIAINFO
 
 using namespace v8;
 
-namespace transcode {
+namespace transcoding {
 
 Handle<Object> createMediaInfo(AVFormatContext* ctx, bool encoding);
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_MEDIAINFO
+#endif // NODE_TRANSCODING_MEDIAINFO

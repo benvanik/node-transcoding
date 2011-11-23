@@ -7,10 +7,10 @@ extern "C" {
 #include "libavcodec/avcodec.h"
 }
 
-#ifndef NODE_TRANSCODE_UTILS
-#define NODE_TRANSCODE_UTILS
+#ifndef NODE_TRANSCODING_UTILS
+#define NODE_TRANSCODING_UTILS
 
-namespace transcode {
+namespace transcoding {
 
 #ifndef countof
 #ifdef _countof
@@ -63,6 +63,6 @@ static double V8GetNumber(v8::Handle<v8::Object> obj, const char* name,
   }
 }
 
-}; // transcode
+}; // transcoding
 
-#endif // NODE_TRANSCODE_UTILS
+#endif // NODE_TRANSCODING_UTILS

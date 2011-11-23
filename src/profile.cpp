@@ -1,6 +1,6 @@
 #include "profile.h"
 
-using namespace transcode;
+using namespace transcoding;
 using namespace v8;
 
 CodecOptions::CodecOptions(Handle<Object> source) :
