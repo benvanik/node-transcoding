@@ -38,6 +38,5 @@ def build(bld):
     'src/io.cpp',
     'src/mediainfo.cpp',
     'src/profile.cpp',
-    #'src/processor.cpp',
-    #'src/task.cpp'
+    'src/task.cpp',
   ]

@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "io.h"
 #include "mediainfo.h"
-//#include "task.h"
+#include "task.h"
 
 using namespace transcode;
 using namespace v8;
@@ -68,7 +68,7 @@ extern "C" void node_transcode_init(Handle<Object> target) {
   av_register_all();
   av_log_set_level(AV_LOG_QUIET);
 
-  //transcode::Task::Init(target);
+  transcode::Task::Init(target);
 
   NODE_SET_METHOD(target, "setDebugLevel", transcode::setDebugLevel);
   NODE_SET_METHOD(target, "queryInfo", transcode::queryInfo);

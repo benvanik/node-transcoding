@@ -1,7 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
-#include "processor.h"
+#include "profile.h"
 
 #ifndef NODE_TRANSCODE_TASK
 #define NODE_TRANSCODE_TASK
@@ -10,18 +10,30 @@ using namespace v8;
 
 namespace transcode {
 
-class Task : public node::ObjectWrap, public ProcessorSink {
+typedef struct Progress_t {
+  double    timestamp;
+  double    duration;
+  double    timeElapsed;
+  double    timeEstimated;
+  double    timeRemaining;
+  double    timeMultiplier;
+} Progress;
+
+class Task : public node::ObjectWrap {
 public:
   static void Init(Handle<Object> target);
   static Handle<Value> New(const Arguments& args);
 
 public:
-  Task(Handle<Object> source, Handle<Object> target, Handle<Object> options);
+  Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
+      Handle<Object> options);
   ~Task();
 
   static Handle<Value> GetSource(Local<String> property,
       const AccessorInfo& info);
   static Handle<Value> GetTarget(Local<String> property,
+      const AccessorInfo& info);
+  static Handle<Value> GetProfile(Local<String> property,
       const AccessorInfo& info);
   static Handle<Value> GetOptions(Local<String> property,
       const AccessorInfo& info);
@@ -43,9 +55,8 @@ private:
 private:
   Persistent<Object>      source;
   Persistent<Object>      target;
+  Persistent<Object>      profile;
   Persistent<Object>      options;
-
-  Processor               processor;
 };
 
 }; // transcode

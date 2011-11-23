@@ -143,7 +143,7 @@ If you are doing simple offline transcoding (no need for streaming, extra
 options, progress updates, etc) then you can use the `process` API:
 
     var transcode = require('transcode');
-    transcode.process(source, target, transcode.profiles.APPLE_TV_2, function(err, sourceInfo, targetInfo) {
+    transcode.process(source, target, transcode.profiles.APPLE_TV_2, {}, function(err, sourceInfo, targetInfo) {
       // Completed
     });
 
@@ -153,9 +153,7 @@ track events.
 ### Advanced Transcoding
 
     var transcode = require('transcode');
-    var task = transcode.createTask(source, target, {
-      profile: transcode.profiles.APPLE_TV_2
-    });
+    var task = transcode.createTask(source, target, transcode.profiles.APPLE_TV_2);
 
     task.on('begin', function(sourceInfo, targetInfo) {
       // Transcoding beginning, info available
@@ -203,8 +201,7 @@ things such as client-side stream switching (changing audio channels/etc).
 
     // TODO: API for this... something like:
     // (where target is used as a base filename for all the extra stuff)
-    var task = transcode.createTask(source, target, {
-      profile: ...,
+    var task = transcode.createTask(source, target, profile, {
       streaming: {
         segmentDuration: 10,
         allowCaching: true

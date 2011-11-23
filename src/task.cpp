@@ -32,6 +32,7 @@ void Task::Init(Handle<Object> target) {
 
   NODE_SET_PROTOTYPE_ACCESSOR(ctor, "source", GetSource);
   NODE_SET_PROTOTYPE_ACCESSOR(ctor, "target", GetTarget);
+  NODE_SET_PROTOTYPE_ACCESSOR(ctor, "profile", GetProfile);
   NODE_SET_PROTOTYPE_ACCESSOR(ctor, "options", GetOptions);
   NODE_SET_PROTOTYPE_ACCESSOR(ctor, "progress", GetProgress);
 
@@ -44,22 +45,21 @@ Handle<Value> Task::New(const Arguments& args)
   HandleScope scope;
   Local<Object> source = args[0]->ToObject();
   Local<Object> target = args[1]->ToObject();
-  Local<Object> options = args[2]->ToObject();
-  Task* task = new Task(source, target, options);
+  Local<Object> profile = args[2]->ToObject();
+  Local<Object> options = args[3]->ToObject();
+  Task* task = new Task(source, target, profile, options);
   task->Wrap(args.This());
   return scope.Close(args.This());
 }
 
-Task::Task(
-    Handle<Object> source, Handle<Object> target, Handle<Object> options) {
+Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
+    Handle<Object> options) {
   HandleScope scope;
 
   this->source = Persistent<Object>::New(source);
   this->target = Persistent<Object>::New(target);
+  this->profile = Persistent<Object>::New(profile);
   this->options = Persistent<Object>::New(options);
-
-  // Not retained - lifetime is tied to this instance
-  this->processor.SetSink(this);
 }
 
 Task::~Task() {
@@ -77,6 +77,13 @@ Handle<Value> Task::GetTarget(Local<String> property,
   Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
   return scope.Close(task->target);
+}
+
+Handle<Value> Task::GetProfile(Local<String> property,
+    const AccessorInfo& info) {
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
+  HandleScope scope;
+  return scope.Close(task->profile);
 }
 
 Handle<Value> Task::GetOptions(Local<String> property,
@@ -112,7 +119,8 @@ Handle<Value> Task::GetProgress(Local<String> property,
   Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
 
-  Progress progress = task->processor.GetProgress();
+  //Progress progress = task->processor.GetProgress();
+  Progress progress;
 
   return scope.Close(task->GetProgressInternal(&progress));
 }
@@ -121,10 +129,7 @@ Handle<Value> Task::Start(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  InputDescriptor* input = new InputDescriptor(task->source);
-  OutputDescriptor* output = new OutputDescriptor(task->target);
-  ProcessorOptions* options = new ProcessorOptions(task->options);
-  task->processor.Execute(input, output, options, args.This());
+  // TODO: exec
 
   return scope.Close(Undefined());
 }
@@ -133,7 +138,7 @@ Handle<Value> Task::Stop(const Arguments& args) {
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  task->processor.Abort();
+  // TODO: abort
 
   return scope.Close(Undefined());
 }
