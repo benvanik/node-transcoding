@@ -289,18 +289,21 @@ void Task::AsyncHandleClose(uv_handle_t* handle) {
   handle->data = NULL;
 }
 
+#define EMIT_PROGRESS_TIME_CAP    1.0   // sec between emits
+#define EMIT_PROGRESS_PERCENT_CAP 0.01  // 1/100*% between emits
+
 void Task::ThreadWorker(uv_work_t* request) {
   Task* task = static_cast<Task*>(request->data);
   TaskContext* context = task->context;
   assert(context);
   assert(context->running);
 
+  double percentDelta = 0;
   int64_t startTime = av_gettime();
   int64_t lastProgressTime = 0;
   Progress progress;
   memset(&progress, 0, sizeof(progress));
-  //progress.duration   = context->ictx->duration / (double)AV_TIME_BASE;
-  double percentDelta = 0;
+  progress.duration   = context->ictx->duration / (double)AV_TIME_BASE;
 
   printf("PRE\n");
 
@@ -318,8 +321,8 @@ void Task::ThreadWorker(uv_work_t* request) {
     // Emit progress event, if needed
     int64_t currentTime = av_gettime();
     bool emitProgress =
-        (currentTime - lastProgressTime > 1 * 1000000) ||
-        (percentDelta > 0.01);
+        (currentTime - lastProgressTime > EMIT_PROGRESS_TIME_CAP * 1000000) ||
+        (percentDelta > EMIT_PROGRESS_PERCENT_CAP);
     if (emitProgress) {
       lastProgressTime = currentTime;
       percentDelta = 0;
@@ -335,17 +338,15 @@ void Task::ThreadWorker(uv_work_t* request) {
     // Perform some work
     printf("PUMP->\n");
     bool finished = context->Pump(&ret);
+    context->err = ret;
     printf("->PUMP\n");
 
-    if (finished) {
-      // ?
+    // End, if needed
+    if (finished && !ret) {
+      context->End();
       break;
     }
   } while (!ret && !aborting);
-
-  if (!context->err) {
-    context->End();
-  }
 
   // Complete
   // Note that we fire this instead of doing it in the worker complete so that
