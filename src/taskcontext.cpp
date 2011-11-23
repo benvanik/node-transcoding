@@ -24,8 +24,6 @@ TaskContext::~TaskContext() {
   delete this->input;
   delete this->output;
   delete this->profile;
-
-  printf("taskcontext dtor\n");
 }
 
 void TaskContext::Abort() {
@@ -59,7 +57,8 @@ int TaskContext::Prepare() {
 
   // Setup output container
   if (!ret) {
-    AVOutputFormat* ofmt = av_guess_format("mov", NULL, NULL);
+    AVOutputFormat* ofmt = av_guess_format(
+        profile->container.c_str(), NULL, NULL);
     if (ofmt) {
       octx->oformat = ofmt;
     } else {

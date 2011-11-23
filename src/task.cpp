@@ -80,8 +80,6 @@ Task::~Task() {
   this->target.Dispose();
   this->profile.Dispose();
   this->options.Dispose();
-
-  printf("task dtor\n");
 }
 
 Handle<Value> Task::GetSource(Local<String> property,
@@ -166,8 +164,6 @@ Handle<Value> Task::Start(const Arguments& args) {
   }
   task->EmitBegin(context->ictx, context->octx);
 
-  printf("pre launch\n");
-
   // Prepare thread request
   uv_work_t* req = new uv_work_t();
   req->data = task;
@@ -178,8 +174,6 @@ Handle<Value> Task::Start(const Arguments& args) {
   // Start thread
   int status = uv_queue_work(uv_default_loop(), req, ThreadWorker, NULL);
   assert(status == 0);
-
-  printf("post launch\n");
 
   return scope.Close(Undefined());
 }
@@ -257,8 +251,6 @@ void Task::EmitCompleteAsync(uv_async_t* handle, int status) {
   TaskContext* context = task->context;
   assert(context);
 
-  printf("complete\n");
-
   // Always fire one last progress event
   if (!context->err) {
     task->progress.timestamp = task->progress.duration;
@@ -306,8 +298,6 @@ void Task::ThreadWorker(uv_work_t* request) {
   memset(&progress, 0, sizeof(progress));
   progress.duration   = context->ictx->duration / (double)AV_TIME_BASE;
 
-  printf("PRE\n");
-
   TaskAsyncRequest* asyncReq;
   int ret = 0;
   bool aborting = false;
@@ -337,12 +327,10 @@ void Task::ThreadWorker(uv_work_t* request) {
     }
 
     // Perform some work
-    //printf("PUMP->\n");
     double oldPercent = progress.timestamp / progress.duration;
     bool finished = context->Pump(&ret, &progress);
     percentDelta += (progress.timestamp / progress.duration) - oldPercent;
     context->err = ret;
-    //printf("->PUMP %g %g %g\n", progress.timestamp, progress.duration, percentDelta);
 
     // End, if needed
     if (finished && !ret) {
@@ -360,6 +348,4 @@ void Task::ThreadWorker(uv_work_t* request) {
   asyncReq->progress = progress;
   uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
   uv_async_send(&asyncReq->req);
-
-  printf("POST %d\n", context->err);
 }
