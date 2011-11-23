@@ -25,14 +25,15 @@ public:
   TaskContext(IOHandle* input, IOHandle* output, Profile* profile);
   ~TaskContext();
 
-  Progress GetProgress();
   void Abort();
 
   // Occurs exclusively in the v8 thread
   int Prepare();
+  AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
+      int* pret);
 
   // Occurs exclusively in a worker thread
-  bool Pump(int* pret);
+  bool Pump(int* pret, Progress* progress);
   void End();
 
 public:
@@ -46,8 +47,6 @@ public:
   IOHandle*           output;
   Profile*            profile;
   // options
-
-  Progress            progress;
 
   AVFormatContext*    ictx;
   AVFormatContext*    octx;

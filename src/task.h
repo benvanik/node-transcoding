@@ -58,6 +58,7 @@ private:
   Persistent<Object>  options;
 
   TaskContext*        context;
+  Progress            progress;
 };
 
 }; // transcode

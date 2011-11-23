@@ -69,6 +69,8 @@ Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
   this->target = Persistent<Object>::New(target);
   this->profile = Persistent<Object>::New(profile);
   this->options = Persistent<Object>::New(options);
+
+  memset(&this->progress, 0, sizeof(this->progress));
 }
 
 Task::~Task() {
@@ -137,8 +139,7 @@ Handle<Value> Task::GetProgress(Local<String> property,
   HandleScope scope;
 
   if (task->context) {
-    Progress progress = task->context->GetProgress();
-    return scope.Close(task->GetProgressInternal(&progress));
+    return scope.Close(task->GetProgressInternal(&task->progress));
   } else {
     return scope.Close(Null());
   }
@@ -163,7 +164,7 @@ Handle<Value> Task::Start(const Arguments& args) {
     task->EmitError(ret);
     return scope.Close(Undefined());
   }
-  //task->EmitBegin(context->ictx, context->octx);
+  task->EmitBegin(context->ictx, context->octx);
 
   printf("pre launch\n");
 
@@ -260,10 +261,10 @@ void Task::EmitCompleteAsync(uv_async_t* handle, int status) {
 
   // Always fire one last progress event
   if (!context->err) {
-    context->progress.timestamp = context->progress.duration;
-    context->progress.timeRemaining = 0;
+    task->progress.timestamp = task->progress.duration;
+    task->progress.timeRemaining = 0;
   }
-  task->EmitProgress(context->progress);
+  task->EmitProgress(task->progress);
 
   assert(context->running);
   context->running = false;
@@ -315,7 +316,7 @@ void Task::ThreadWorker(uv_work_t* request) {
     // Also grab the current abort flag
     pthread_mutex_lock(&context->lock);
     aborting = context->abort;
-    memcpy(&context->progress, &progress, sizeof(progress));
+    memcpy(&task->progress, &progress, sizeof(progress));
     pthread_mutex_unlock(&context->lock);
 
     // Emit progress event, if needed
@@ -330,16 +331,18 @@ void Task::ThreadWorker(uv_work_t* request) {
       asyncReq = new TaskAsyncRequest();
       asyncReq->req.data = asyncReq;
       asyncReq->task = task;
-      asyncReq->progress = context->progress;
+      asyncReq->progress = progress;
       uv_async_init(uv_default_loop(), &asyncReq->req, EmitProgressAsync);
       uv_async_send(&asyncReq->req);
     }
 
     // Perform some work
-    printf("PUMP->\n");
-    bool finished = context->Pump(&ret);
+    //printf("PUMP->\n");
+    double oldPercent = progress.timestamp / progress.duration;
+    bool finished = context->Pump(&ret, &progress);
+    percentDelta += (progress.timestamp / progress.duration) - oldPercent;
     context->err = ret;
-    printf("->PUMP\n");
+    //printf("->PUMP %g %g %g\n", progress.timestamp, progress.duration, percentDelta);
 
     // End, if needed
     if (finished && !ret) {
@@ -354,7 +357,7 @@ void Task::ThreadWorker(uv_work_t* request) {
   asyncReq = new TaskAsyncRequest();
   asyncReq->req.data = asyncReq;
   asyncReq->task = task;
-  asyncReq->progress = context->progress;
+  asyncReq->progress = progress;
   uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
   uv_async_send(&asyncReq->req);
 
