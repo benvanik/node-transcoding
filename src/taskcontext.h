@@ -32,7 +32,8 @@ public:
   int Prepare();
 
   // Occurs exclusively in a worker thread
-  bool Pump(int *pret);
+  bool Pump(int* pret);
+  void End();
 
 public:
   pthread_mutex_t     lock;

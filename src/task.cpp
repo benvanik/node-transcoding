@@ -172,6 +172,7 @@ Handle<Value> Task::Start(const Arguments& args) {
   req->data = task;
   task->Ref();
   task->context = context;
+  context->running = true;
 
   // Start thread
   int status = uv_queue_work(uv_default_loop(), req, ThreadWorker, NULL);
@@ -292,6 +293,7 @@ void Task::ThreadWorker(uv_work_t* request) {
   Task* task = static_cast<Task*>(request->data);
   TaskContext* context = task->context;
   assert(context);
+  assert(context->running);
 
   int64_t startTime = av_gettime();
   int64_t lastProgressTime = 0;
@@ -340,6 +342,10 @@ void Task::ThreadWorker(uv_work_t* request) {
       break;
     }
   } while (!ret && !aborting);
+
+  if (!context->err) {
+    context->End();
+  }
 
   // Complete
   // Note that we fire this instead of doing it in the worker complete so that
