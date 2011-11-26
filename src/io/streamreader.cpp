@@ -11,6 +11,11 @@ using namespace transcoding::io;
 // will block until there are. If there are too many buffers queued, the stream
 // is paused until buffers are drained.
 
+typedef struct ReaderAsyncRequest_t {
+  uv_async_t      req;
+  StreamReader*   stream;
+} ReaderAsyncRequest;
+
 StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
     IOReader(source),
     paused(false), err(0), eof(false),
@@ -106,11 +111,14 @@ Handle<Value> StreamReader::OnData(const Arguments& args) {
   // Check for max buffer condition
   bool needsPause = false;
   if (stream->totalBufferredBytes > stream->maxBufferedBytes) {
-    //needsPause = true;
+    needsPause = true;
     stream->paused = true;
   }
 
-  //pthread_cond_signal(&stream->cond);
+  //printf("OnData: buffer %lld/%lld, paused: %d\n",
+  //    stream->totalBufferredBytes, stream->maxBufferedBytes, stream->paused);
+
+  pthread_cond_signal(&stream->cond);
   pthread_mutex_unlock(&stream->lock);
 
   if (needsPause) {
@@ -165,6 +173,27 @@ Handle<Value> StreamReader::OnError(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
+void StreamReader::ResumeAsync(uv_async_t* handle, int status) {
+  HandleScope scope;
+  assert(status == 0);
+  ReaderAsyncRequest* req = static_cast<ReaderAsyncRequest*>(handle->data);
+  StreamReader* stream = req->stream;
+
+  Local<Function> resume =
+      Local<Function>::Cast(stream->source->Get(String::New("resume")));
+  if (!resume.IsEmpty()) {
+    resume->Call(stream->source, 0, NULL);
+  }
+
+  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
+}
+
+void StreamReader::AsyncHandleClose(uv_handle_t* handle) {
+  ReaderAsyncRequest* req = static_cast<ReaderAsyncRequest*>(handle->data);
+  delete req;
+  handle->data = NULL;
+}
+
 int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
   StreamReader* stream = static_cast<StreamReader*>(opaque);
 
@@ -203,13 +232,22 @@ int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
     // Stream is paused - restart it
     if (stream->totalBufferredBytes < stream->maxBufferedBytes) {
       needsResume = true;
+      stream->paused = false;
     }
   }
 
   pthread_mutex_unlock(&stream->lock);
 
+  //printf("ReadPacket: buffer %lld/%lld, paused: %d, resuming: %d\n",
+  //    stream->totalBufferredBytes, stream->maxBufferedBytes, stream->paused,
+  //    needsResume);
+
   if (needsResume) {
-    // TODO: issue async resume
+    ReaderAsyncRequest* asyncReq = new ReaderAsyncRequest();
+    asyncReq->req.data = asyncReq;
+    asyncReq->stream = stream;
+    uv_async_init(uv_default_loop(), &asyncReq->req, ResumeAsync);
+    uv_async_send(&asyncReq->req);
   }
 
   return ret;

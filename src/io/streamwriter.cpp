@@ -7,7 +7,7 @@ using namespace transcoding::io;
 
 #define STREAM_HANDLE_BUFFER_SIZE (64 * 1024)
 
-StreamWriter::StreamWriter(Handle<Object> source) :
+StreamWriter::StreamWriter(Handle<Object> source, size_t maxBufferedBytes) :
     IOWriter(source) {
   HandleScope scope;
 

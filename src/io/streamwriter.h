@@ -11,9 +11,13 @@ using namespace v8;
 namespace transcoding {
 namespace io {
 
+#define STREAMWRITER_BUFFER_SIZE  (64 * 1024)
+#define STREAMWRITER_MAX_SIZE     (64 * 1024 * 1024)
+
 class StreamWriter : public IOWriter {
 public:
-  StreamWriter(Handle<Object> source);
+  StreamWriter(Handle<Object> source,
+      size_t maxBufferedBytes = STREAMWRITER_MAX_SIZE);
   virtual ~StreamWriter();
 
   virtual int Open();

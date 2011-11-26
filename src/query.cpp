@@ -62,8 +62,12 @@ Handle<Value> Query::Start(const Arguments& args) {
 
   assert(!query->context);
 
-  // Setup context
-  IOReader* input = IOReader::Create(query->source);
+  // Since we are just a query, only read small chunks - if sourcing from the
+  // network this will greatly reduce the chance of use downloading entire files
+  // just to read the headers
+  size_t maxBufferBytes = 128 * 1024;
+  IOReader* input = IOReader::Create(query->source, maxBufferBytes);
+
   QueryContext* context = new QueryContext(input);
 
   // Prepare thread request

@@ -14,7 +14,7 @@ namespace transcoding {
 namespace io {
 
 #define STREAMREADER_BUFFER_SIZE  (64 * 1024)
-#define STREAMREADER_MAX_SIZE     (64 * 64 * 1024)
+#define STREAMREADER_MAX_SIZE     (64 * 1024 * 1024)
 
 class ReadBuffer {
 public:
@@ -44,6 +44,9 @@ private:
   static Handle<Value> OnEnd(const Arguments& args);
   static Handle<Value> OnClose(const Arguments& args);
   static Handle<Value> OnError(const Arguments& args);
+
+  static void ResumeAsync(uv_async_t* handle, int status);
+  static void AsyncHandleClose(uv_handle_t* handle);
 
   static int ReadPacket(void* opaque, uint8_t* buffer, int bufferSize);
   static int64_t Seek(void* opaque, int64_t offset, int whence);

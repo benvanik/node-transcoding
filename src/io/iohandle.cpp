@@ -2,6 +2,7 @@
 #include "filereader.h"
 #include "filewriter.h"
 #include "streamreader.h"
+#include "streamwriter.h"
 
 using namespace transcoding;
 using namespace transcoding::io;
@@ -24,13 +25,14 @@ IOReader::IOReader(Handle<Object> source) :
 IOReader::~IOReader() {
 }
 
-IOReader* IOReader::Create(Handle<Object> source) {
+IOReader* IOReader::Create(Handle<Object> source, size_t maxBufferedBytes) {
   HandleScope scope;
 
   if (source->IsStringObject()) {
     return new FileReader(source);
   } else {
-    return new StreamReader(source);
+    return new StreamReader(source,
+        maxBufferedBytes ? maxBufferedBytes : STREAMREADER_MAX_SIZE);
   }
 }
 
@@ -41,13 +43,13 @@ IOWriter::IOWriter(Handle<Object> source) :
 IOWriter::~IOWriter() {
 }
 
-IOWriter* IOWriter::Create(Handle<Object> source) {
+IOWriter* IOWriter::Create(Handle<Object> source, size_t maxBufferedBytes) {
   HandleScope scope;
 
   if (source->IsStringObject()) {
     return new FileWriter(source);
   } else {
-    //return new StreamWriter(source);
-    return NULL;
+    return new StreamWriter(source,
+        maxBufferedBytes ? maxBufferedBytes : STREAMWRITER_MAX_SIZE);
   }
 }

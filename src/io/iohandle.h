@@ -28,7 +28,7 @@ public:
   IOReader(Handle<Object> source);
   virtual ~IOReader();
 
-  static IOReader* Create(Handle<Object> source);
+  static IOReader* Create(Handle<Object> source, size_t maxBufferedBytes = 0);
 };
 
 class IOWriter : public IOHandle {
@@ -36,7 +36,7 @@ public:
   IOWriter(Handle<Object> source);
   virtual ~IOWriter();
 
-  static IOWriter* Create(Handle<Object> source);
+  static IOWriter* Create(Handle<Object> source, size_t maxBufferedBytes = 0);
 };
 
 }; // io
