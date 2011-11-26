@@ -179,13 +179,16 @@ AVStream* TaskContext::AddOutputStreamCopy(AVFormatContext* octx,
   memcpy(ocodec->extradata, icodec->extradata, icodec->extradata_size);
   ocodec->extradata_size          = icodec->extradata_size;
 
-  if (av_q2d(icodec->time_base) * icodec->ticks_per_frame >
-      av_q2d(istream->time_base) && av_q2d(istream->time_base) < 1 / 1000.0) {
-    ocodec->time_base             = icodec->time_base;
-    ocodec->time_base.num         *= icodec->ticks_per_frame;
-  } else {
-    ocodec->time_base             = istream->time_base;
-  }
+  // Code from avconv, but doesn't seem to work all the time - for now just
+  // copy the timebase
+  ocodec->time_base               = istream->time_base;
+  //if (av_q2d(icodec->time_base) * icodec->ticks_per_frame >
+  //    av_q2d(istream->time_base) && av_q2d(istream->time_base) < 1 / 1000.0) {
+  //  ocodec->time_base             = icodec->time_base;
+  //  ocodec->time_base.num         *= icodec->ticks_per_frame;
+  //} else {
+  //  ocodec->time_base             = istream->time_base;
+  //}
 
   switch (icodec->codec_type) {
   case CODEC_TYPE_VIDEO:
