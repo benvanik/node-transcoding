@@ -2,7 +2,7 @@
 #include "mediainfo.h"
 
 using namespace transcoding;
-using namespace v8;
+using namespace transcoding::io;
 
 typedef struct TaskAsyncRequest_t {
   uv_async_t      req;
@@ -150,8 +150,8 @@ Handle<Value> Task::Start(const Arguments& args) {
   assert(!task->context);
 
   // Setup context
-  IOHandle* input = IOHandle::Create(task->source);
-  IOHandle* output = IOHandle::Create(task->target);
+  IOReader* input = IOReader::Create(task->source);
+  IOWriter* output = IOWriter::Create(task->target);
   Profile* profile = new Profile(task->profile);
   TaskContext* context = new TaskContext(input, output, profile);
 

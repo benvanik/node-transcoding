@@ -1,8 +1,8 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
-#include "io.h"
 #include "profile.h"
+#include "io/io.h"
 
 #ifndef NODE_TRANSCODING_TASKCONTEXT
 #define NODE_TRANSCODING_TASKCONTEXT
@@ -22,7 +22,7 @@ typedef struct Progress_t {
 
 class TaskContext {
 public:
-  TaskContext(IOHandle* input, IOHandle* output, Profile* profile);
+  TaskContext(io::IOReader* input, io::IOWriter* output, Profile* profile);
   ~TaskContext();
 
   void Abort();
@@ -43,8 +43,8 @@ public:
   bool                abort;
   int                 err;
 
-  IOHandle*           input;
-  IOHandle*           output;
+  io::IOReader*       input;
+  io::IOWriter*       output;
   Profile*            profile;
   // options
 

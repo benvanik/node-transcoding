@@ -1,12 +1,12 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
-#include "io.h"
 #include "mediainfo.h"
 #include "task.h"
+#include "io/io.h"
 
 using namespace transcoding;
-using namespace v8;
+using namespace transcoding::io;
 
 namespace transcoding {
 
@@ -27,12 +27,12 @@ static Handle<Value> queryInfo(const Arguments& args) {
   HandleScope scope;
 
   Local<Object> source = args[0]->ToObject();
-  IOHandle* input = IOHandle::Create(source);
+  IOReader* input = IOReader::Create(source);
 
   Local<Function> callback = args[1].As<Function>();
 
   int ret = 0;
-  AVFormatContext* ctx = createInputContext(input, &ret);
+  AVFormatContext* ctx = io::createInputContext(input, &ret);
   if (ret) {
     // Failed to open/parse
     char buffer[256];

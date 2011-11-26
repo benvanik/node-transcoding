@@ -1,9 +1,9 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
-#include "io.h"
 #include "profile.h"
 #include "taskcontext.h"
+#include "io/io.h"
 
 #ifndef NODE_TRANSCODING_TASK
 #define NODE_TRANSCODING_TASK

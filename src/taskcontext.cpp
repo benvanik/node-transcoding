@@ -1,8 +1,9 @@
 #include "taskcontext.h"
 
 using namespace transcoding;
+using namespace transcoding::io;
 
-TaskContext::TaskContext(IOHandle* input, IOHandle* output, Profile* profile) :
+TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile) :
     running(false), abort(false), err(0),
     input(input), output(output), profile(profile),
     ictx(NULL), octx(NULL) {
@@ -20,6 +21,9 @@ TaskContext::~TaskContext() {
   if (this->octx) {
     avformat_free_context(this->octx);
   }
+
+  this->input->Close();
+  this->output->Close();
 
   delete this->input;
   delete this->output;
@@ -270,7 +274,4 @@ void TaskContext::End() {
 
   av_write_trailer(octx);
   avio_flush(octx->pb);
-
-  this->output->Close(octx->pb);
-  this->input->Close(ictx->pb);
 }
