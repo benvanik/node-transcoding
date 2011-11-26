@@ -27,12 +27,10 @@ public:
 
   void Abort();
 
-  // Occurs exclusively in the v8 thread
+  // Occurs exclusively in a worker thread
   int Prepare();
   AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
       int* pret);
-
-  // Occurs exclusively in a worker thread
   bool Pump(int* pret, Progress* progress);
   void End();
 

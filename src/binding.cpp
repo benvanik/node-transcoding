@@ -1,7 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
-#include "mediainfo.h"
+#include "query.h"
 #include "task.h"
 #include "io/io.h"
 
@@ -23,44 +23,6 @@ static Handle<Value> setDebugLevel(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
-static Handle<Value> queryInfo(const Arguments& args) {
-  HandleScope scope;
-
-  Local<Object> source = args[0]->ToObject();
-  IOReader* input = IOReader::Create(source);
-
-  Local<Function> callback = args[1].As<Function>();
-
-  int ret = 0;
-  AVFormatContext* ctx = io::createInputContext(input, &ret);
-  if (ret) {
-    // Failed to open/parse
-    char buffer[256];
-    av_strerror(ret, buffer, sizeof(buffer));
-    Handle<Value> argv[] = {
-      Exception::Error(String::New(buffer)),
-      Undefined(),
-    };
-    callback->Call(Context::GetCurrent()->Global(), countof(argv), argv);
-  } else {
-    // Generate media info
-    //av_dump_format(ctx, 0, NULL, 0);
-    Local<Object> result = Local<Object>::New(createMediaInfo(ctx, false));
-
-    avformat_free_context(ctx);
-
-    Handle<Value> argv[] = {
-      Undefined(),
-      result,
-    };
-    callback->Call(Context::GetCurrent()->Global(), countof(argv), argv);
-  }
-
-  delete input;
-
-  return scope.Close(Undefined());
-}
-
 }; // transcoding
 
 extern "C" void node_transcoding_init(Handle<Object> target) {
@@ -70,10 +32,10 @@ extern "C" void node_transcoding_init(Handle<Object> target) {
   av_register_all();
   av_log_set_level(AV_LOG_QUIET);
 
+  transcoding::Query::Init(target);
   transcoding::Task::Init(target);
 
   NODE_SET_METHOD(target, "setDebugLevel", transcoding::setDebugLevel);
-  NODE_SET_METHOD(target, "queryInfo", transcoding::queryInfo);
 }
 
 NODE_MODULE(node_transcoding, node_transcoding_init);

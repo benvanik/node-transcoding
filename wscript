@@ -37,6 +37,8 @@ def build(bld):
     'src/binding.cpp',
     'src/mediainfo.cpp',
     'src/profile.cpp',
+    'src/query.cpp',
+    'src/querycontext.cpp',
     'src/task.cpp',
     'src/taskcontext.cpp',
     'src/io/filereader.cpp',

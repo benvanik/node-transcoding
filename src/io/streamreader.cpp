@@ -83,7 +83,9 @@ void StreamReader::Close() {
     }
   }
 
-  av_free(this->context->buffer);
+  if (this->context->buffer) {
+    av_free(this->context->buffer);
+  }
   av_free(this->context);
   this->context = NULL;
 }

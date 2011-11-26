@@ -120,7 +120,6 @@ int TaskContext::Prepare() {
   return ret;
 }
 
-
 AVStream* TaskContext::AddOutputStreamCopy(AVFormatContext* octx,
     AVStream* istream, int* pret) {
   int ret = 0;
