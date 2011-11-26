@@ -76,9 +76,9 @@ You may also need to add the MacPorts paths to your `~./profile`:
 
 ### Sources/targets
 
-All APIs take a source and target. Today these must be file paths that can be
-accessed by normal filesystem APIs. In the future they can be node streams, or
-in the case of sources HTTP or any other protocol node can open.
+All APIs take a source and target. Sources can be either strings representing
+file paths or Node readable streams. Targets must currently be string file
+paths, although that will be changing.
 
 ### Media Information
 
