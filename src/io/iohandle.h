@@ -16,7 +16,7 @@ public:
   virtual ~IOHandle();
 
   virtual int Open() = 0;
-  virtual void Close();
+  virtual void Close() = 0;
 
 public:
   Persistent<Object>  source;

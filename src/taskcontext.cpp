@@ -45,16 +45,21 @@ int TaskContext::Prepare() {
   if (!ret) {
     ictx = createInputContext(this->input, &ret);
     if (ret) {
-      avformat_free_context(ictx);
-      avformat_free_context(octx);
+      if (ictx) {
+        avformat_free_context(ictx);
+      }
       ictx = octx = NULL;
     }
   }
   if (!ret) {
     octx = createOutputContext(this->output, &ret);
     if (ret) {
-      avformat_free_context(ictx);
-      avformat_free_context(octx);
+      if (ictx) {
+        avformat_free_context(ictx);
+      }
+      if (octx) {
+        avformat_free_context(octx);
+      }
       ictx = octx = NULL;
     }
   }
@@ -103,8 +108,12 @@ int TaskContext::Prepare() {
     this->ictx = ictx;
     this->octx = octx;
   } else {
-    avformat_free_context(ictx);
-    avformat_free_context(octx);
+    if (ictx) {
+      avformat_free_context(ictx);
+    }
+    if (octx) {
+      avformat_free_context(octx);
+    }
     ictx = octx = NULL;
   }
 

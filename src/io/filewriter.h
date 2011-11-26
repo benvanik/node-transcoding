@@ -17,6 +17,7 @@ public:
   virtual ~FileWriter();
 
   virtual int Open();
+  virtual void Close();
 
 public:
   std::string     path;

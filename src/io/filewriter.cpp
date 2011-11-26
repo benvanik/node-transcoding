@@ -7,7 +7,7 @@ FileWriter::FileWriter(Handle<Object> source) :
     IOWriter(source) {
   HandleScope scope;
 
-  this->path = *String::AsciiValue(source);
+  this->path = *String::Utf8Value(source);
 }
 
 FileWriter::~FileWriter() {
@@ -21,4 +21,9 @@ int FileWriter::Open() {
   }
   this->context = s;
   return 0;
+}
+
+void FileWriter::Close() {
+  avio_close(this->context);
+  this->context = NULL;
 }

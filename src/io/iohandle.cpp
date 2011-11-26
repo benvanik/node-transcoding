@@ -17,11 +17,6 @@ IOHandle::~IOHandle() {
   this->source.Dispose();
 }
 
-void IOHandle::Close() {
-  avio_close(this->context);
-  this->context = NULL;
-}
-
 IOReader::IOReader(Handle<Object> source) :
     IOHandle(source) {
 }

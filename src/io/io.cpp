@@ -30,6 +30,9 @@ AVFormatContext* transcoding::io::createInputContext(
     goto CLEANUP;
   }
 
+  // Prevent avio_close (which would hose us)
+  ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+
   ret = av_find_stream_info(ctx);
   if (ret < 0) {
     goto CLEANUP;

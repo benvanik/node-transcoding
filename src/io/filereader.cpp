@@ -22,3 +22,8 @@ int FileReader::Open() {
   this->context = s;
   return 0;
 }
+
+void FileReader::Close() {
+  avio_close(this->context);
+  this->context = NULL;
+}

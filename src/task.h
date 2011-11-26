@@ -42,6 +42,7 @@ public:
   void EmitError(int err);
   void EmitEnd();
 
+  static void EmitBeginAsync(uv_async_t* handle, int status);
   static void EmitProgressAsync(uv_async_t* handle, int status);
   static void EmitCompleteAsync(uv_async_t* handle, int status);
   static void AsyncHandleClose(uv_handle_t* handle);

@@ -38,6 +38,7 @@ void StreamWriter::Close() {
       Local<Function>::Cast(this->source->Get(String::New("end")));
   end->Call(this->source, 0, NULL);
 
+  av_free(this->context->buffer);
   av_free(this->context);
   this->context = NULL;
 }

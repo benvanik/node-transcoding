@@ -26,6 +26,20 @@ do {                                                                      \
                                           callback);                      \
 } while (0)
 
+#define NODE_ON_EVENT(obj, name, callback, target) \
+  do { \
+    Local<FunctionTemplate> __cbt = FunctionTemplate::New(callback, \
+        External::New(reinterpret_cast<void*>(target))); \
+    Local<Function> __cb = __cbt->GetFunction(); \
+    __cb->SetName(String::New(name)); \
+    Local<Function> __on = Local<Function>::Cast(obj->Get(String::New("on"))); \
+    Handle<Value> __argv[] = { \
+      String::New(name), \
+      __cb, \
+    }; \
+    __on->Call(obj, countof(__argv), __argv); \
+  } while(0)
+
 #define NODE_ASYNC_SEND(req, name) \
   do { \
     uv_async_t* handle_##name = new uv_async_t; \
@@ -47,7 +61,7 @@ static std::string V8GetString(v8::Handle<v8::Object> obj, const char* name,
   if (value.IsEmpty()) {
     return original;
   } else {
-    return *v8::String::AsciiValue(value);
+    return *v8::String::Utf8Value(value);
   }
 }
 

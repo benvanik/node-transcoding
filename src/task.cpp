@@ -155,15 +155,6 @@ Handle<Value> Task::Start(const Arguments& args) {
   Profile* profile = new Profile(task->profile);
   TaskContext* context = new TaskContext(input, output, profile);
 
-  // Prepare the input/output (done on the main thread to make things easier)
-  int ret = context->Prepare();
-  if (ret) {
-    delete context;
-    task->EmitError(ret);
-    return scope.Close(Undefined());
-  }
-  task->EmitBegin(context->ictx, context->octx);
-
   // Prepare thread request
   uv_work_t* req = new uv_work_t();
   req->data = task;
@@ -235,6 +226,17 @@ void Task::EmitEnd() {
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
 
+void Task::EmitBeginAsync(uv_async_t* handle, int status) {
+  assert(status == 0);
+  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
+
+  // NOTE: NOT THREAD SAFE AGHHHH
+  TaskContext* context = req->task->context;
+  req->task->EmitBegin(context->ictx, context->octx);
+
+  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
+}
+
 void Task::EmitProgressAsync(uv_async_t* handle, int status) {
   assert(status == 0);
   TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
@@ -291,6 +293,22 @@ void Task::ThreadWorker(uv_work_t* request) {
   assert(context);
   assert(context->running);
 
+  TaskAsyncRequest* asyncReq;
+
+  // Prepare the input/output (done on the main thread to make things easier)
+  int ret = context->Prepare();
+  if (ret) {
+    pthread_mutex_lock(&context->lock);
+    context->err = ret;
+    pthread_mutex_unlock(&context->lock);
+    return;
+  }
+  asyncReq = new TaskAsyncRequest();
+  asyncReq->req.data = asyncReq;
+  asyncReq->task = task;
+  uv_async_init(uv_default_loop(), &asyncReq->req, EmitBeginAsync);
+  uv_async_send(&asyncReq->req);
+
   double percentDelta = 0;
   int64_t startTime = av_gettime();
   int64_t lastProgressTime = 0;
@@ -298,8 +316,6 @@ void Task::ThreadWorker(uv_work_t* request) {
   memset(&progress, 0, sizeof(progress));
   progress.duration   = context->ictx->duration / (double)AV_TIME_BASE;
 
-  TaskAsyncRequest* asyncReq;
-  int ret = 0;
   bool aborting = false;
   do {
     // Copy progress (speeds up queries later on)
