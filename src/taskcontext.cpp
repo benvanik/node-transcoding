@@ -257,6 +257,11 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
   AVStream* stream = ictx->streams[packet.stream_index];
   progress->timestamp = packet.pts / (double)stream->time_base.den;
 
+  // Ignore if we don't care about this stream
+  if (stream->discard == AVDISCARD_ALL) {
+    return false;
+  }
+
   ret = av_dup_packet(&packet);
   if (ret) {
     fprintf(stderr, "Could not duplicate packet\n");
