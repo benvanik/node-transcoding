@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 var fs = require('fs');
+var http = require('http');
 var path = require('path');
 var transcoding = require('transcoding');
 var util = require('util');
@@ -27,14 +28,27 @@ if (opts.args.length < 1) {
 }
 
 var inputFile = path.normalize(opts.args[0]);
-if (!path.existsSync(inputFile)) {
-  console.log('input file not found');
+var source;
+if (inputFile == '-') {
+  // STDIN
+  source = process.stdin;
+} else if (inputFile.indexOf('http') == 0) {
+  // Web request
+  // TODO: setup request
+  console.log('not yet implemented: HTTP requests');
   return;
+} else {
+  // Local file
+  if (!path.existsSync(inputFile)) {
+    console.log('input file not found');
+    return;
+  }
+  source = inputFile;
 }
 
 if (opts.args.length < 2) {
   // No output given, so just query info
-  transcoding.queryInfo(inputFile, function(err, info) {
+  transcoding.queryInfo(source, function(err, info) {
     console.log('Info for ' + inputFile + ':');
     console.log(util.inspect(info, false, 3));
   });
@@ -48,14 +62,22 @@ if (!profile) {
 }
 
 var outputFile = path.normalize(opts.args[1]);
-var outputPath = path.dirname(outputFile);
-if (!path.existsSync(outputPath)) {
-  fs.mkdirSync(outputPath);
+var target;
+if (outputFile == '-') {
+  // STDOUT
+  target = process.stdout;
+} else {
+  // Local file
+  var outputPath = path.dirname(outputFile);
+  if (!path.existsSync(outputPath)) {
+    fs.mkdirSync(outputPath);
+  }
+  target = outputFile;
 }
 
 console.log('transcoding ' + inputFile + ' -> ' + outputFile);
 
-var task = transcoding.createTask(inputFile, outputFile, profile, {
+var task = transcoding.createTask(source, target, profile, {
 });
 task.on('begin', function(sourceInfo, targetInfo) {
   // Transcoding beginning
@@ -67,7 +89,7 @@ task.on('begin', function(sourceInfo, targetInfo) {
 });
 task.on('progress', function(progress) {
   // New progress made, currrently at timestamp out of duration
-  console.log(util.inspect(progress));
+  //console.log(util.inspect(progress));
   console.log('progress ' +
       (progress.timestamp / progress.duration * 100) + '%');
 });
