@@ -301,6 +301,11 @@ void Task::ThreadWorker(uv_work_t* request) {
     pthread_mutex_lock(&context->lock);
     context->err = ret;
     pthread_mutex_unlock(&context->lock);
+    asyncReq = new TaskAsyncRequest();
+    asyncReq->req.data = asyncReq;
+    asyncReq->task = task;
+    uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
+    uv_async_send(&asyncReq->req);
     return;
   }
   asyncReq = new TaskAsyncRequest();

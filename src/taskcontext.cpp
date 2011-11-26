@@ -85,10 +85,11 @@ int TaskContext::Prepare() {
       switch (stream->codec->codec_type) {
       case CODEC_TYPE_VIDEO:
       case CODEC_TYPE_AUDIO:
-      case CODEC_TYPE_SUBTITLE:
         stream->discard = AVDISCARD_NONE;
         this->AddOutputStreamCopy(octx, stream, &ret);
         break;
+      // TODO: subtitles
+      case CODEC_TYPE_SUBTITLE:
       default:
         stream->discard = AVDISCARD_ALL;
         break;
@@ -244,8 +245,8 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
 
   AVPacket packet;
   int done = av_read_frame(ictx, &packet);
-  if (done < 0) {
-    *pret = ret;
+  if (done) {
+    *pret = done == AVERROR_EOF ? 0 : done;
     return true;
   }
 
@@ -253,8 +254,9 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
   AVStream* stream = ictx->streams[packet.stream_index];
   progress->timestamp = packet.pts / (double)stream->time_base.den;
 
-  if (av_dup_packet(&packet) < 0) {
-    fprintf(stderr, "Could not duplicate packet");
+  ret = av_dup_packet(&packet);
+  if (ret) {
+    fprintf(stderr, "Could not duplicate packet\n");
     av_free_packet(&packet);
     *pret = ret;
     return true;
