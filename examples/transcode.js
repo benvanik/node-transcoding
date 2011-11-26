@@ -10,6 +10,14 @@ var opts = require('tav').set({
   profile: {
     note: 'Encoding profile',
     value: 'APPLE_TV_2'
+  },
+  stream_input: {
+    note: 'Stream file input to test streaming',
+    value: false
+  },
+  stream_output: {
+    note: 'Stream file output to test streaming',
+    value: false
   }
 });
 
@@ -44,6 +52,11 @@ if (inputFile == '-') {
     return;
   }
   source = inputFile;
+
+  // Test files via streams
+  if (opts['stream_input']) {
+    source = fs.createReadStream(inputFile);
+  }
 }
 
 if (opts.args.length < 2) {
@@ -73,6 +86,11 @@ if (outputFile == '-') {
     fs.mkdirSync(outputPath);
   }
   target = outputFile;
+
+  // Test files via streams
+  if (opts['stream_output']) {
+    target = fs.createWriteStream(outputFile);
+  }
 }
 
 console.log('transcoding ' + inputFile + ' -> ' + outputFile);
