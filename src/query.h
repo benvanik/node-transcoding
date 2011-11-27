@@ -30,15 +30,22 @@ public:
   void EmitInfo(Handle<Object> sourceInfo);
   void EmitError(int err);
 
-  static void EmitCompleteAsync(uv_async_t* handle, int status);
+  static void CompleteAsync(uv_async_t* handle, int status);
   static void AsyncHandleClose(uv_handle_t* handle);
 
   static void ThreadWorker(uv_work_t* request);
+  static void ThreadWorkerAfter(uv_work_t* request);
 
 private:
   Persistent<Object>  source;
 
   QueryContext*       context;
+
+  pthread_mutex_t     lock;
+  bool                abort;
+  int                 err;
+
+  uv_async_t*         asyncReq;
 };
 
 }; // transcoding

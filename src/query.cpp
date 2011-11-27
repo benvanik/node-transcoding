@@ -4,11 +4,6 @@
 using namespace transcoding;
 using namespace transcoding::io;
 
-typedef struct QueryAsyncRequest_t {
-  uv_async_t      req;
-  Query*          query;
-} QueryAsyncRequest;
-
 static Persistent<FunctionTemplate> _query_ctor;
 
 void Query::Init(Handle<Object> target) {
@@ -27,8 +22,7 @@ void Query::Init(Handle<Object> target) {
   target->Set(String::NewSymbol("Query"), _query_ctor->GetFunction());
 }
 
-Handle<Value> Query::New(const Arguments& args)
-{
+Handle<Value> Query::New(const Arguments& args) {
   HandleScope scope;
   Local<Object> source = args[0]->ToObject();
   Query* query = new Query(source);
@@ -37,14 +31,24 @@ Handle<Value> Query::New(const Arguments& args)
 }
 
 Query::Query(Handle<Object> source) :
-    context(NULL) {
+    context(NULL), abort(false), err(0) {
+  TC_LOG_D("Query::Query()\n");
   HandleScope scope;
 
   this->source = Persistent<Object>::New(source);
+
+  pthread_mutex_init(&this->lock, NULL);
+
+  this->asyncReq = new uv_async_t();
+  this->asyncReq->data = this;
+  uv_async_init(uv_default_loop(), this->asyncReq, CompleteAsync);
 }
 
 Query::~Query() {
+  TC_LOG_D("Query::~Query()\n");
   assert(!this->context);
+
+  pthread_mutex_destroy(&this->lock);
 
   this->source.Dispose();
 }
@@ -57,6 +61,8 @@ Handle<Value> Query::GetSource(Local<String> property,
 }
 
 Handle<Value> Query::Start(const Arguments& args) {
+  TC_LOG_D("Query::Start()\n");
+
   Query* query = ObjectWrap::Unwrap<Query>(args.This());
   HandleScope scope;
 
@@ -75,22 +81,24 @@ Handle<Value> Query::Start(const Arguments& args) {
   req->data = query;
   query->Ref();
   query->context = context;
-  context->running = true;
 
   // Start thread
-  int status = uv_queue_work(uv_default_loop(), req, ThreadWorker, NULL);
+  int status = uv_queue_work(uv_default_loop(), req,
+      ThreadWorker, ThreadWorkerAfter);
   assert(status == 0);
 
   return scope.Close(Undefined());
 }
 
 Handle<Value> Query::Stop(const Arguments& args) {
+  TC_LOG_D("Query::Stop()\n");
+
   Query* query = ObjectWrap::Unwrap<Query>(args.This());
   HandleScope scope;
 
-  if (query->context) {
-    query->context->Abort();
-  }
+  pthread_mutex_lock(&query->lock);
+  query->abort = true;
+  pthread_mutex_unlock(&query->lock);
 
   return scope.Close(Undefined());
 }
@@ -118,16 +126,16 @@ void Query::EmitError(int err) {
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
 
-void Query::EmitCompleteAsync(uv_async_t* handle, int status) {
-  assert(status == 0);
-  QueryAsyncRequest* req = static_cast<QueryAsyncRequest*>(handle->data);
-  Query* query = req->query;
+void Query::CompleteAsync(uv_async_t* handle, int status) {
+  Query* query = static_cast<Query*>(handle->data);
+  if (!query) {
+    return;
+  }
+  TC_LOG_D("Query::CompleteAsync(): err %d\n", query->err);
   QueryContext* context = query->context;
   assert(context);
 
-  assert(context->running);
-  context->running = false;
-  int err = context->err;
+  int err = query->err;
 
   Local<Object> sourceInfo;
   if (!err) {
@@ -144,35 +152,36 @@ void Query::EmitCompleteAsync(uv_async_t* handle, int status) {
   }
 
   query->Unref();
+  handle->data = NULL; // no more
 
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
+  uv_close((uv_handle_t*)handle, AsyncHandleClose);
 }
 
 void Query::AsyncHandleClose(uv_handle_t* handle) {
-  QueryAsyncRequest* req = static_cast<QueryAsyncRequest*>(handle->data);
-  delete req;
-  handle->data = NULL;
+  delete handle;
 }
 
 void Query::ThreadWorker(uv_work_t* request) {
+  TC_LOG_D("Query::ThreadWorker()\n");
+
   Query* query = static_cast<Query*>(request->data);
   QueryContext* context = query->context;
   assert(context);
-  assert(context->running);
-
-  QueryAsyncRequest* asyncReq;
 
   int ret = context->Execute();
   if (ret) {
-    context->err = ret;
+    TC_LOG_D("Query::ThreadWorker(): execute failed (%d)\n", ret);
+    query->err = ret;
   }
 
   // Complete
   // Note that we fire this instead of doing it in the worker complete so that
   // all progress events will get dispatched prior to this
-  asyncReq = new QueryAsyncRequest();
-  asyncReq->req.data = asyncReq;
-  asyncReq->query = query;
-  uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
-  uv_async_send(&asyncReq->req);
+  uv_async_send(query->asyncReq);
+
+  TC_LOG_D("Query::ThreadWorker() exiting\n");
+}
+
+void Query::ThreadWorkerAfter(uv_work_t* request) {
+  delete request;
 }

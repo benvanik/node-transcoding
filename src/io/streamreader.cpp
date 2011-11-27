@@ -11,19 +11,19 @@ using namespace transcoding::io;
 // will block until there are. If there are too many buffers queued, the stream
 // is paused until buffers are drained.
 
-typedef struct ReaderAsyncRequest_t {
-  uv_async_t      req;
-  StreamReader*   stream;
-} ReaderAsyncRequest;
-
 StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
     IOReader(source),
     paused(false), err(0), eof(false),
     maxBufferedBytes(maxBufferedBytes), totalBufferredBytes(0) {
+  TC_LOG_D("StreamReader::StreamReader()\n");
   HandleScope scope;
 
   pthread_mutex_init(&this->lock, NULL);
   pthread_cond_init(&this->cond, NULL);
+
+  this->asyncReq = new uv_async_t();
+  this->asyncReq->data = this;
+  uv_async_init(uv_default_loop(), this->asyncReq, ResumeAsync);
 
   // TODO: support seeking?
   this->canSeek = false;
@@ -44,11 +44,15 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
 }
 
 StreamReader::~StreamReader() {
+  TC_LOG_D("StreamReader::~StreamReader()\n");
   pthread_cond_destroy(&this->cond);
   pthread_mutex_destroy(&this->lock);
+
+  uv_close((uv_handle_t*)this->asyncReq, AsyncHandleClose);
 }
 
 int StreamReader::Open() {
+  TC_LOG_D("StreamReader::Open()\n");
   int bufferSize = STREAMREADER_BUFFER_SIZE;
   uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
   AVIOContext* s = avio_alloc_context(
@@ -62,6 +66,7 @@ int StreamReader::Open() {
 }
 
 void StreamReader::Close() {
+  TC_LOG_D("StreamReader::Close()\n");
   HandleScope scope;
   Local<Object> global = Context::GetCurrent()->Global();
   Handle<Object> source = this->source;
@@ -81,10 +86,10 @@ void StreamReader::Close() {
 
   bool readable = source->Get(String::New("readable"))->IsTrue();
   if (readable) {
-    Local<Function> destroy =
-        Local<Function>::Cast(source->Get(String::New("destroy")));
-    if (!destroy.IsEmpty()) {
-      destroy->Call(source, 0, NULL);
+    Local<Function> destroySoon =
+        Local<Function>::Cast(source->Get(String::New("destroySoon")));
+    if (!destroySoon.IsEmpty()) {
+      destroySoon->Call(source, 0, NULL);
     }
   }
 
@@ -100,11 +105,15 @@ Handle<Value> StreamReader::OnData(const Arguments& args) {
   StreamReader* stream =
       static_cast<StreamReader*>(External::Unwrap(args.Data()));
 
-  pthread_mutex_lock(&stream->lock);
-
   Local<Object> buffer = Local<Object>::Cast(args[0]);
   ReadBuffer* readBuffer = new ReadBuffer(
       (uint8_t*)Buffer::Data(buffer), Buffer::Length(buffer));
+
+  TC_LOG_D("StreamReader::OnData(): %d new bytes\n",
+      (int)Buffer::Length(buffer));
+
+  pthread_mutex_lock(&stream->lock);
+
   stream->buffers.push_back(readBuffer);
   stream->totalBufferredBytes += readBuffer->length;
 
@@ -122,6 +131,7 @@ Handle<Value> StreamReader::OnData(const Arguments& args) {
   pthread_mutex_unlock(&stream->lock);
 
   if (needsPause) {
+    TC_LOG_D("StreamReader::OnData(): buffer full, pausing\n");
     Local<Function> pause =
         Local<Function>::Cast(stream->source->Get(String::New("pause")));
     if (!pause.IsEmpty()) {
@@ -137,6 +147,8 @@ Handle<Value> StreamReader::OnEnd(const Arguments& args) {
   StreamReader* stream =
       static_cast<StreamReader*>(External::Unwrap(args.Data()));
 
+  TC_LOG_D("StreamReader::OnEnd()\n");
+
   pthread_mutex_lock(&stream->lock);
   stream->eof = true;
   pthread_cond_signal(&stream->cond);
@@ -149,6 +161,8 @@ Handle<Value> StreamReader::OnClose(const Arguments& args) {
   HandleScope scope;
   StreamReader* stream =
       static_cast<StreamReader*>(External::Unwrap(args.Data()));
+
+  TC_LOG_D("StreamReader::OnClose()\n");
 
   pthread_mutex_lock(&stream->lock);
   stream->eof = true;
@@ -163,7 +177,8 @@ Handle<Value> StreamReader::OnError(const Arguments& args) {
   StreamReader* stream =
       static_cast<StreamReader*>(External::Unwrap(args.Data()));
 
-  printf("StreamReader::OnError %s\n", *String::Utf8Value(args[0]->ToString()));
+  TC_LOG_D("StreamReader::OnError(): %s\n",
+      *String::Utf8Value(args[0]->ToString()));
 
   pthread_mutex_lock(&stream->lock);
   stream->err = AVERROR_IO;
@@ -174,24 +189,20 @@ Handle<Value> StreamReader::OnError(const Arguments& args) {
 }
 
 void StreamReader::ResumeAsync(uv_async_t* handle, int status) {
+  TC_LOG_D("StreamReader::ResumeAsync()\n");
   HandleScope scope;
   assert(status == 0);
-  ReaderAsyncRequest* req = static_cast<ReaderAsyncRequest*>(handle->data);
-  StreamReader* stream = req->stream;
+  StreamReader* stream = static_cast<StreamReader*>(handle->data);
 
   Local<Function> resume =
       Local<Function>::Cast(stream->source->Get(String::New("resume")));
   if (!resume.IsEmpty()) {
     resume->Call(stream->source, 0, NULL);
   }
-
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
 }
 
 void StreamReader::AsyncHandleClose(uv_handle_t* handle) {
-  ReaderAsyncRequest* req = static_cast<ReaderAsyncRequest*>(handle->data);
-  delete req;
-  handle->data = NULL;
+  delete handle;
 }
 
 int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
@@ -209,6 +220,7 @@ int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
 
   if (stream->err) {
     // Stream error
+    TC_LOG_D("StreamReader::ReadPacket(): stream error (%d)\n", stream->err);
     ret = stream->err;
   } else if (stream->totalBufferredBytes) {
     // Read the next buffer
@@ -219,12 +231,15 @@ int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
       stream->buffers.erase(stream->buffers.begin());
       delete nextBuffer;
     }
+    TC_LOG_D("StreamReader::ReadPacket(): reading %d bytes\n", (int)bytesRead);
     ret = (int)bytesRead;
   } else if (stream->eof) {
     // Stream at EOF
+    TC_LOG_D("StreamReader::ReadPacket(): stream eof\n");
     ret = 0; // eof
   } else {
     // Stream in error (or unknown, so return EOF)
+    TC_LOG_D("StreamReader::ReadPacket(): stream UNKNOWN (%d)\n", stream->err);
     ret = stream->err;
   }
 
@@ -243,11 +258,8 @@ int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
   //    needsResume);
 
   if (needsResume) {
-    ReaderAsyncRequest* asyncReq = new ReaderAsyncRequest();
-    asyncReq->req.data = asyncReq;
-    asyncReq->stream = stream;
-    uv_async_init(uv_default_loop(), &asyncReq->req, ResumeAsync);
-    uv_async_send(&asyncReq->req);
+    TC_LOG_D("StreamReader::ReadPacket(): resuming stream\n");
+    uv_async_send(stream->asyncReq);
   }
 
   return ret;

@@ -54,6 +54,8 @@ private:
 public:
   bool        canSeek;
 
+  uv_async_t*         asyncReq;
+
   pthread_mutex_t     lock;
   pthread_cond_t      cond;
   bool                paused;

@@ -4,14 +4,6 @@
 using namespace transcoding;
 using namespace transcoding::io;
 
-typedef struct TaskAsyncRequest_t {
-  uv_async_t      req;
-  Task*           task;
-  union {
-    Progress      progress;
-  };
-} TaskAsyncRequest;
-
 static Persistent<String> _task_timestamp_symbol;
 static Persistent<String> _task_duration_symbol;
 static Persistent<String> _task_timeElapsed_symbol;
@@ -48,8 +40,7 @@ void Task::Init(Handle<Object> target) {
   target->Set(String::NewSymbol("Task"), _task_ctor->GetFunction());
 }
 
-Handle<Value> Task::New(const Arguments& args)
-{
+Handle<Value> Task::New(const Arguments& args) {
   HandleScope scope;
   Local<Object> source = args[0]->ToObject();
   Local<Object> target = args[1]->ToObject();
@@ -62,7 +53,8 @@ Handle<Value> Task::New(const Arguments& args)
 
 Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
     Handle<Object> options) :
-    context(NULL) {
+    context(NULL), abort(false), err(0) {
+  TC_LOG_D("Task::Task()\n");
   HandleScope scope;
 
   this->source = Persistent<Object>::New(source);
@@ -71,10 +63,23 @@ Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
   this->options = Persistent<Object>::New(options);
 
   memset(&this->progress, 0, sizeof(this->progress));
+
+  this->asyncReq = new uv_async_t();
+  this->asyncReq->data = this;
+  uv_async_init(uv_default_loop(), this->asyncReq, ProcessAsync);
+
+  pthread_mutex_init(&this->lock, NULL);
 }
 
 Task::~Task() {
+  TC_LOG_D("Task::~Task()\n");
   assert(!this->context);
+
+  if (this->messages.size()) {
+    TC_LOG_D("Task::~Task(): dtor when messages %d pending\n",
+        (int)this->messages.size());
+  }
+  pthread_mutex_destroy(&this->lock);
 
   this->source.Dispose();
   this->target.Dispose();
@@ -144,6 +149,7 @@ Handle<Value> Task::GetProgress(Local<String> property,
 }
 
 Handle<Value> Task::Start(const Arguments& args) {
+  TC_LOG_D("Task::Start()\n");
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
@@ -160,22 +166,23 @@ Handle<Value> Task::Start(const Arguments& args) {
   req->data = task;
   task->Ref();
   task->context = context;
-  context->running = true;
 
   // Start thread
-  int status = uv_queue_work(uv_default_loop(), req, ThreadWorker, NULL);
+  int status = uv_queue_work(uv_default_loop(), req,
+      ThreadWorker, ThreadWorkerAfter);
   assert(status == 0);
 
   return scope.Close(Undefined());
 }
 
 Handle<Value> Task::Stop(const Arguments& args) {
+  TC_LOG_D("Task::Stop()\n");
   Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
 
-  if (task->context) {
-    task->context->Abort();
-  }
+  pthread_mutex_lock(&task->lock);
+  task->abort = true;
+  pthread_mutex_unlock(&task->lock);
 
   return scope.Close(Undefined());
 }
@@ -226,93 +233,107 @@ void Task::EmitEnd() {
   node::MakeCallback(this->handle_, "emit", countof(argv), argv);
 }
 
-void Task::EmitBeginAsync(uv_async_t* handle, int status) {
+void Task::ProcessAsync(uv_async_t* handle, int status) {
   assert(status == 0);
-  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
+  Task* task = static_cast<Task*>(handle->data);
+  if (!task) {
+    return;
+  }
 
-  // NOTE: NOT THREAD SAFE AGHHHH
-  TaskContext* context = req->task->context;
-  req->task->EmitBegin(context->ictx, context->octx);
-
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
-}
-
-void Task::EmitProgressAsync(uv_async_t* handle, int status) {
-  assert(status == 0);
-  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
-
-  req->task->EmitProgress(req->progress);
-
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
-}
-
-void Task::EmitCompleteAsync(uv_async_t* handle, int status) {
-  assert(status == 0);
-  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
-  Task* task = req->task;
   TaskContext* context = task->context;
   assert(context);
 
-  // Always fire one last progress event
-  if (!context->err) {
-    task->progress.timestamp = task->progress.duration;
-    task->progress.timeRemaining = 0;
+  while (true) {
+    int abortAll = false;
+
+    pthread_mutex_lock(&task->lock);
+    TaskMessage* message = NULL;
+    int remaining = task->messages.size();
+    if (remaining) {
+      message = task->messages.front();
+      task->messages.erase(task->messages.begin());
+    }
+    pthread_mutex_unlock(&task->lock);
+    if (!message) {
+      break;
+    }
+
+    switch (message->type) {
+      case TaskMessageBegin:
+        TC_LOG_D("Task::ProcessAsync(TaskMessageBegin)\n");
+        // NOTE: NOT THREAD SAFE AGHHHH
+        task->EmitBegin(context->ictx, context->octx);
+        break;
+      case TaskMessageProgress:
+        TC_LOG_D("Task::ProcessAsync(TaskMessageProgress)\n");
+        task->progress = message->progress;
+        task->EmitProgress(message->progress);
+        break;
+      case TaskMessageComplete:
+      TC_LOG_D("Task::ProcessAsync(TaskMessageComplete), err: %d\n", task->err);
+        // Always fire one last progress event
+        if (!task->err) {
+          task->progress.timestamp = task->progress.duration;
+          task->progress.timeRemaining = 0;
+        }
+        task->EmitProgress(task->progress);
+
+        int err = task->err;
+
+        delete task->context;
+        task->context = NULL;
+
+        if (err) {
+          task->EmitError(err);
+        } else {
+          task->EmitEnd();
+        }
+
+        uv_close((uv_handle_t*)task->asyncReq, AsyncHandleClose);
+
+        task->Unref();
+        handle->data = NULL; // no more processing!
+        abortAll = true;
+        break;
+    }
+
+    delete message;
   }
-  task->EmitProgress(task->progress);
-
-  assert(context->running);
-  context->running = false;
-  int err = context->err;
-
-  delete task->context;
-  task->context = NULL;
-
-  if (err) {
-    task->EmitError(err);
-  } else {
-    task->EmitEnd();
-  }
-
-  task->Unref();
-
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
 }
 
 void Task::AsyncHandleClose(uv_handle_t* handle) {
-  TaskAsyncRequest* req = static_cast<TaskAsyncRequest*>(handle->data);
-  delete req;
-  handle->data = NULL;
+  delete handle;
 }
 
 #define EMIT_PROGRESS_TIME_CAP    1.0   // sec between emits
 #define EMIT_PROGRESS_PERCENT_CAP 0.01  // 1/100*% between emits
 
 void Task::ThreadWorker(uv_work_t* request) {
+  TC_LOG_D("Task::ThreadWorker()\n");
+
   Task* task = static_cast<Task*>(request->data);
   TaskContext* context = task->context;
   assert(context);
-  assert(context->running);
 
-  TaskAsyncRequest* asyncReq;
+  TaskMessage* msg;
 
   // Prepare the input/output (done on the main thread to make things easier)
   int ret = context->Prepare();
   if (ret) {
-    pthread_mutex_lock(&context->lock);
-    context->err = ret;
-    pthread_mutex_unlock(&context->lock);
-    asyncReq = new TaskAsyncRequest();
-    asyncReq->req.data = asyncReq;
-    asyncReq->task = task;
-    uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
-    uv_async_send(&asyncReq->req);
+    TC_LOG_D("Task::ThreadWorker(): Prepare failed (%d)\n", ret);
+    pthread_mutex_lock(&task->lock);
+    task->err = ret;
+    task->messages.push_back(new TaskMessage(TaskMessageComplete));
+    pthread_mutex_unlock(&task->lock);
+    uv_async_send(task->asyncReq);
     return;
   }
-  asyncReq = new TaskAsyncRequest();
-  asyncReq->req.data = asyncReq;
-  asyncReq->task = task;
-  uv_async_init(uv_default_loop(), &asyncReq->req, EmitBeginAsync);
-  uv_async_send(&asyncReq->req);
+
+  // Begin
+  pthread_mutex_lock(&task->lock);
+  task->messages.push_back(new TaskMessage(TaskMessageBegin));
+  pthread_mutex_unlock(&task->lock);
+  uv_async_send(task->asyncReq);
 
   double percentDelta = 0;
   int64_t startTime = av_gettime();
@@ -323,12 +344,14 @@ void Task::ThreadWorker(uv_work_t* request) {
 
   bool aborting = false;
   do {
-    // Copy progress (speeds up queries later on)
-    // Also grab the current abort flag
-    pthread_mutex_lock(&context->lock);
-    aborting = context->abort;
-    memcpy(&task->progress, &progress, sizeof(progress));
-    pthread_mutex_unlock(&context->lock);
+    // Grab the current abort flag
+    pthread_mutex_lock(&task->lock);
+    aborting = task->abort;
+    pthread_mutex_unlock(&task->lock);
+    if (aborting) {
+      TC_LOG_D("Task::ThreadWorker(): aborting\n");
+      break;
+    }
 
     // Emit progress event, if needed
     int64_t currentTime = av_gettime();
@@ -339,34 +362,47 @@ void Task::ThreadWorker(uv_work_t* request) {
       lastProgressTime = currentTime;
       percentDelta = 0;
 
-      asyncReq = new TaskAsyncRequest();
-      asyncReq->req.data = asyncReq;
-      asyncReq->task = task;
-      asyncReq->progress = progress;
-      uv_async_init(uv_default_loop(), &asyncReq->req, EmitProgressAsync);
-      uv_async_send(&asyncReq->req);
+      // Progress
+      TaskMessage* msg = new TaskMessage(TaskMessageProgress);
+      msg->progress = progress;
+      pthread_mutex_lock(&task->lock);
+      task->messages.push_back(msg);
+      // Quick optimization so we don't flood requests
+      bool needsAsyncReq = task->messages.size() == 1;
+      pthread_mutex_unlock(&task->lock);
+      if (needsAsyncReq) {
+        uv_async_send(task->asyncReq);
+      }
     }
 
     // Perform some work
     double oldPercent = progress.timestamp / progress.duration;
     bool finished = context->Pump(&ret, &progress);
     percentDelta += (progress.timestamp / progress.duration) - oldPercent;
-    context->err = ret;
+    task->err = ret;
 
     // End, if needed
     if (finished && !ret) {
+      TC_LOG_D("Task::ThreadWorker(): end, err: %d, ret: %d, finished: %d\n",
+          task->err, ret, finished);
       context->End();
       break;
     }
   } while (!ret && !aborting);
 
+  TC_LOG_D("Task::ThreadWorker(): done (%d)\n", task->err);
+
   // Complete
   // Note that we fire this instead of doing it in the worker complete so that
   // all progress events will get dispatched prior to this
-  asyncReq = new TaskAsyncRequest();
-  asyncReq->req.data = asyncReq;
-  asyncReq->task = task;
-  asyncReq->progress = progress;
-  uv_async_init(uv_default_loop(), &asyncReq->req, EmitCompleteAsync);
-  uv_async_send(&asyncReq->req);
+  pthread_mutex_lock(&task->lock);
+  task->messages.push_back(new TaskMessage(TaskMessageComplete));
+  pthread_mutex_unlock(&task->lock);
+  uv_async_send(task->asyncReq);
+
+  TC_LOG_D("Task::ThreadWorker() exiting\n");
+}
+
+void Task::ThreadWorkerAfter(uv_work_t* request) {
+  delete request;
 }

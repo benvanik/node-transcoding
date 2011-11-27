@@ -1,5 +1,6 @@
 #include <node.h>
 #include <v8.h>
+#include <vector>
 #include "utils.h"
 #include "profile.h"
 #include "taskcontext.h"
@@ -11,6 +12,21 @@
 using namespace v8;
 
 namespace transcoding {
+
+typedef enum TaskMessageType_e {
+  TaskMessageBegin,
+  TaskMessageProgress,
+  TaskMessageComplete,
+} TaskMessageType;
+
+class TaskMessage {
+public:
+  TaskMessage(TaskMessageType type) : type(type) {}
+  TaskMessageType type;
+  union {
+    Progress      progress;
+  };
+};
 
 class Task : public node::ObjectWrap {
 public:
@@ -42,12 +58,11 @@ public:
   void EmitError(int err);
   void EmitEnd();
 
-  static void EmitBeginAsync(uv_async_t* handle, int status);
-  static void EmitProgressAsync(uv_async_t* handle, int status);
-  static void EmitCompleteAsync(uv_async_t* handle, int status);
+  static void ProcessAsync(uv_async_t* handle, int status);
   static void AsyncHandleClose(uv_handle_t* handle);
 
   static void ThreadWorker(uv_work_t* request);
+  static void ThreadWorkerAfter(uv_work_t* request);
 
 private:
   Handle<Value> GetProgressInternal(Progress* progress);
@@ -60,6 +75,12 @@ private:
 
   TaskContext*        context;
   Progress            progress;
+
+  uv_async_t*         asyncReq;
+  pthread_mutex_t     lock;
+  bool                abort;
+  int                 err;
+  std::vector<TaskMessage*> messages;
 };
 
 }; // transcoding

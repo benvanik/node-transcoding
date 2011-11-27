@@ -15,18 +15,10 @@ public:
   QueryContext(io::IOReader* input);
   ~QueryContext();
 
-  void Abort();
-
   // Occurs exclusively in the v8 thread
   int Execute();
 
 public:
-  pthread_mutex_t     lock;
-
-  bool                running;
-  bool                abort;
-  int                 err;
-
   io::IOReader*       input;
 
   AVFormatContext*    ictx;

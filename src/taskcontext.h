@@ -25,8 +25,6 @@ public:
   TaskContext(io::IOReader* input, io::IOWriter* output, Profile* profile);
   ~TaskContext();
 
-  void Abort();
-
   // Occurs exclusively in a worker thread
   int Prepare();
   AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
@@ -35,12 +33,6 @@ public:
   void End();
 
 public:
-  pthread_mutex_t     lock;
-
-  bool                running;
-  bool                abort;
-  int                 err;
-
   io::IOReader*       input;
   io::IOWriter*       output;
   Profile*            profile;

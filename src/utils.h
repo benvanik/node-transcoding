@@ -12,6 +12,14 @@ extern "C" {
 
 namespace transcoding {
 
+#define TC_LOG_DEBUG 1
+
+#if TC_LOG_DEBUG
+#define TC_LOG_D(args...) printf(args)
+#else
+#define TC_LOG_D(msg, ...)
+#endif // TC_LOG_DEBUG
+
 #ifndef countof
 #ifdef _countof
 #define countof _countof
@@ -40,19 +48,6 @@ do {                                                                      \
     __on->Call(obj, countof(__argv), __argv); \
   } while(0)
 
-#define NODE_ASYNC_SEND(req, name) \
-  do { \
-    uv_async_t* handle_##name = new uv_async_t; \
-    handle_##name->data = req; \
-    uv_async_init(uv_default_loop(), handle_##name, name); \
-    uv_async_send(handle_##name); \
-  } while(0);
-
-#define NODE_ASYNC_CLOSE(handle, name) \
-  do { \
-    uv_close((uv_handle_t*)handle, name); \
-  } while(0);
-
 static std::string V8GetString(v8::Handle<v8::Object> obj, const char* name,
     std::string& original) {
   v8::HandleScope scope;
@@ -68,12 +63,12 @@ static std::string V8GetString(v8::Handle<v8::Object> obj, const char* name,
 static double V8GetNumber(v8::Handle<v8::Object> obj, const char* name,
     double original) {
   v8::HandleScope scope;
-  v8::Local<v8::Number> value =
-      v8::Local<v8::Number>::Cast(obj->Get(v8::String::NewSymbol(name)));
+  v8::Local<v8::Object> value =
+      v8::Local<v8::Object>::Cast(obj->Get(v8::String::NewSymbol(name)));
   if (value.IsEmpty()) {
     return original;
   } else {
-    return value->Value();
+    return value->NumberValue();
   }
 }
 

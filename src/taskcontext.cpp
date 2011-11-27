@@ -4,16 +4,13 @@ using namespace transcoding;
 using namespace transcoding::io;
 
 TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile) :
-    running(false), abort(false), err(0),
     input(input), output(output), profile(profile),
     ictx(NULL), octx(NULL), bitStreamFilter(NULL) {
-  pthread_mutex_init(&this->lock, NULL);
+  TC_LOG_D("TaskContext::TaskContext()\n");
 }
 
 TaskContext::~TaskContext() {
-  assert(!this->running);
-
-  pthread_mutex_destroy(&this->lock);
+  TC_LOG_D("TaskContext::~TaskContext()\n");
 
   if (this->bitStreamFilter) {
     av_bitstream_filter_close(this->bitStreamFilter);
@@ -32,13 +29,8 @@ TaskContext::~TaskContext() {
   IOHandle::CloseWhenDone(this->output);
 }
 
-void TaskContext::Abort() {
-  pthread_mutex_lock(&this->lock);
-  this->abort = true;
-  pthread_mutex_unlock(&this->lock);
-}
-
 int TaskContext::Prepare() {
+  TC_LOG_D("TaskContext::Prepare()\n");
   int ret = 0;
 
   // Grab contexts
@@ -47,6 +39,8 @@ int TaskContext::Prepare() {
   if (!ret) {
     ictx = createInputContext(this->input, &ret);
     if (ret) {
+      TC_LOG_D("TaskContext::Prepare(): failed createInputContext (%d)\n",
+          ret);
       if (ictx) {
         avformat_free_context(ictx);
       }
@@ -56,6 +50,8 @@ int TaskContext::Prepare() {
   if (!ret) {
     octx = createOutputContext(this->output, &ret);
     if (ret) {
+      TC_LOG_D("TaskContext::Prepare(): failed createOutputContext (%d)\n",
+          ret);
       if (ictx) {
         avformat_free_context(ictx);
       }
@@ -74,6 +70,8 @@ int TaskContext::Prepare() {
       octx->oformat = ofmt;
     } else {
       ret = AVERROR_NOFMT;
+      TC_LOG_D("TaskContext::Prepare(): oformat %s not found (%d)\n",
+          profile->container.c_str(), ret);
     }
     octx->duration    = ictx->duration;
     octx->start_time  = ictx->start_time;
@@ -97,6 +95,7 @@ int TaskContext::Prepare() {
         break;
       }
       if (ret) {
+        TC_LOG_D("TaskContext::Prepare(): failed stream add (%d)\n", ret);
         break;
       }
     }
@@ -109,11 +108,12 @@ int TaskContext::Prepare() {
     for (int n = 0; n < octx->nb_streams; n++) {
       AVStream* stream = octx->streams[n];
       if (stream->codec->codec_id == CODEC_ID_H264) {
-        printf("h264 to mpegts, fixup\n");
+        TC_LOG_D("TaskContext::Prepare(): h264_mp4toannexb on stream %d\n", n);
         AVBitStreamFilterContext* bsfc =
             av_bitstream_filter_init("h264_mp4toannexb");
         if (!bsfc) {
           ret = AVERROR_BSF_NOT_FOUND;
+          TC_LOG_D("TaskContext::Prepare(): h264_mp4toannexb not found\n");
         } else {
           bsfc->next = this->bitStreamFilter;
           this->bitStreamFilter = bsfc;
@@ -125,6 +125,9 @@ int TaskContext::Prepare() {
   // Write header
   if (!ret) {
     ret = avformat_write_header(octx, NULL);
+    if (ret) {
+      TC_LOG_D("TaskContext::Prepare(): failed write_header (%d)\n", ret);
+    }
   }
 
   if (!ret) {
@@ -140,6 +143,7 @@ int TaskContext::Prepare() {
     ictx = octx = NULL;
   }
 
+  TC_LOG_D("TaskContext::Prepare() = %d\n", ret);
   return ret;
 }
 
@@ -263,6 +267,8 @@ CLEANUP:
 }
 
 bool TaskContext::Pump(int* pret, Progress* progress) {
+  //TC_LOG_D("TaskContext::Pump()\n");
+
   AVFormatContext* ictx = this->ictx;
   AVFormatContext* octx = this->octx;
 
@@ -271,7 +277,8 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
   AVPacket packet;
   int done = av_read_frame(ictx, &packet);
   if (done) {
-    *pret = done == AVERROR_EOF ? 0 : done;
+    TC_LOG_D("TaskContext::Pump(): done/failed to read frame (%d)\n", ret);
+    *pret = 0;
     return true;
   }
 
@@ -284,7 +291,7 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
 
   ret = av_dup_packet(&packet);
   if (ret) {
-    fprintf(stderr, "Could not duplicate packet\n");
+    TC_LOG_D("TaskContext::Pump(): failed to duplicate packet (%d)\n", ret);
     av_free_packet(&packet);
     *pret = ret;
     return true;
@@ -308,6 +315,7 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
     bsfc = bsfc->next;
   }
   if (ret) {
+    TC_LOG_D("TaskContext::Pump(): failed to filter packet (%d)\n", ret);
     *pret = ret;
     av_free_packet(&packet);
     return true;
@@ -315,9 +323,10 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
 
   ret = av_interleaved_write_frame(octx, &packet);
   if (ret < 0) {
-    fprintf(stderr, "Warning: Could not write frame of stream\n");
+    TC_LOG_D("TaskContext::Pump(): could not write frame of stream (%d)\n",
+        ret);
   } else if (ret > 0) {
-    fprintf(stderr, "End of stream requested\n");
+    TC_LOG_D("TaskContext::Pump(): end of stream requested (%d)\n", ret);
     av_free_packet(&packet);
     *pret = ret;
     return true;
@@ -330,11 +339,16 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
     progress->timestamp = packet.pts / (double)stream->time_base.den;
   }
 
+  if (ret) {
+    TC_LOG_D("TaskContext::Pump() = %d\n", ret);
+  }
   *pret = ret;
   return false;
 }
 
 void TaskContext::End() {
+  TC_LOG_D("TaskContext::End()\n");
+
   AVFormatContext* ictx = this->ictx;
   AVFormatContext* octx = this->octx;
 
