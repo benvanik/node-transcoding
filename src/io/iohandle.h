@@ -18,6 +18,9 @@ public:
   virtual int Open() = 0;
   virtual void Close() = 0;
 
+  static void CloseWhenDone(IOHandle* handle);
+  virtual bool QueueCloseOnIdle();
+
 public:
   Persistent<Object>  source;
   AVIOContext*        context;

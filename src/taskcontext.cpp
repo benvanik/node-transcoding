@@ -22,12 +22,10 @@ TaskContext::~TaskContext() {
     avformat_free_context(this->octx);
   }
 
-  this->input->Close();
-  this->output->Close();
-
-  delete this->input;
-  delete this->output;
   delete this->profile;
+
+  IOHandle::CloseWhenDone(this->input);
+  IOHandle::CloseWhenDone(this->output);
 }
 
 void TaskContext::Abort() {
@@ -253,9 +251,7 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
     return true;
   }
 
-  // Update progress (as best we can)
   AVStream* stream = ictx->streams[packet.stream_index];
-  progress->timestamp = packet.pts / (double)stream->time_base.den;
 
   // Ignore if we don't care about this stream
   if (stream->discard == AVDISCARD_ALL) {
@@ -281,6 +277,11 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
   }
 
   av_free_packet(&packet);
+
+  // Update progress (only on success)
+  if (!ret) {
+    progress->timestamp = packet.pts / (double)stream->time_base.den;
+  }
 
   *pret = ret;
   return false;

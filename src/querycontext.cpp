@@ -19,9 +19,7 @@ QueryContext::~QueryContext() {
     avformat_free_context(this->ictx);
   }
 
-  this->input->Close();
-
-  delete this->input;
+  IOHandle::CloseWhenDone(this->input);
 }
 
 void QueryContext::Abort() {

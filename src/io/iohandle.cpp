@@ -18,6 +18,20 @@ IOHandle::~IOHandle() {
   this->source.Dispose();
 }
 
+void IOHandle::CloseWhenDone(IOHandle* handle) {
+  if (handle->QueueCloseOnIdle()) {
+    // Queued! Will be deleted at some point
+  } else {
+    // Not queued - delete now
+    delete handle;
+  }
+}
+
+bool IOHandle::QueueCloseOnIdle() {
+  this->Close();
+  return false;
+}
+
 IOReader::IOReader(Handle<Object> source) :
     IOHandle(source) {
 }
