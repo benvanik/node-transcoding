@@ -1,6 +1,7 @@
 #include "iohandle.h"
 #include "filereader.h"
 #include "filewriter.h"
+#include "nullwriter.h"
 #include "streamreader.h"
 #include "streamwriter.h"
 
@@ -60,7 +61,9 @@ IOWriter::~IOWriter() {
 IOWriter* IOWriter::Create(Handle<Object> source, size_t maxBufferedBytes) {
   HandleScope scope;
 
-  if (source->IsStringObject()) {
+  if (source.IsEmpty() || source->IsNull()) {
+    return new NullWriter();
+  } else if (source->IsStringObject()) {
     return new FileWriter(source);
   } else {
     return new StreamWriter(source,

@@ -64,8 +64,8 @@ Handle<Value> Query::GetSource(Local<String> property,
 Handle<Value> Query::Start(const Arguments& args) {
   TC_LOG_D("Query::Start()\n");
 
-  Query* query = ObjectWrap::Unwrap<Query>(args.This());
   HandleScope scope;
+  Query* query = ObjectWrap::Unwrap<Query>(args.This());
 
   assert(!query->context);
 

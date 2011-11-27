@@ -34,8 +34,8 @@ public:
   static Handle<Value> New(const Arguments& args);
 
 public:
-  Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
-      Handle<Object> options);
+  Task(Handle<Object> source, Handle<Value> targetValue,
+      Handle<Object> profile, Handle<Value> optionsValue);
   ~Task();
 
   static Handle<Value> GetSource(Local<String> property,

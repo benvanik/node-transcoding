@@ -42,25 +42,33 @@ void Task::Init(Handle<Object> target) {
 
 Handle<Value> Task::New(const Arguments& args) {
   HandleScope scope;
-  Local<Object> source = args[0]->ToObject();
-  Local<Object> target = args[1]->ToObject();
-  Local<Object> profile = args[2]->ToObject();
-  Local<Object> options = args[3]->ToObject();
-  Task* task = new Task(source, target, profile, options);
+  Task* task = new Task(
+      args[0]->ToObject(),
+      args[1],
+      args[2]->ToObject(),
+      args[3]);
   task->Wrap(args.This());
   return scope.Close(args.This());
 }
 
-Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
-    Handle<Object> options) :
+Task::Task(Handle<Object> source, Handle<Value> targetValue,
+    Handle<Object> profile, Handle<Value> optionsValue) :
     context(NULL), abort(false), err(0) {
   TC_LOG_D("Task::Task()\n");
   HandleScope scope;
 
   this->source = Persistent<Object>::New(source);
-  this->target = Persistent<Object>::New(target);
+  if (targetValue.IsEmpty() || targetValue->IsNull()) {
+    // Null target
+  } else {
+    this->target = Persistent<Object>::New(targetValue.As<Object>());
+  }
   this->profile = Persistent<Object>::New(profile);
-  this->options = Persistent<Object>::New(options);
+  if (optionsValue.IsEmpty() || optionsValue->IsNull()) {
+    this->options = Persistent<Object>::New(Object::New());
+  } else {
+    this->options = Persistent<Object>::New(optionsValue.As<Object>());
+  }
 
   memset(&this->progress, 0, sizeof(this->progress));
 
@@ -170,7 +178,7 @@ Handle<Value> Task::Start(const Arguments& args) {
 
   // Start thread
   int status = uv_queue_work(uv_default_loop(), req,
-      ThreadWorker, ThreadWorkerAfter);
+     ThreadWorker, ThreadWorkerAfter);
   assert(status == 0);
 
   return scope.Close(Undefined());

@@ -47,6 +47,8 @@ var source;
 if (inputFile == '-') {
   // STDIN
   source = process.stdin;
+} else if (inputFile == 'null') {
+  source = null;
 } else if (inputFile.indexOf('http') == 0) {
   // Web request
   var sourceUrl = url.parse(inputFile);
@@ -96,6 +98,8 @@ if (opts.args.length >= 2) {
   if (outputFile == '-') {
     // STDOUT
     target = process.stdout;
+  } else if (outputFile == 'null') {
+    target = null;
   } else if (outputFile.indexOf('http') == 0) {
     // TODO: setup server for streaming?
     console.log('not yet implemented: HTTP serving');

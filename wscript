@@ -45,6 +45,7 @@ def build(bld):
     'src/io/filewriter.cpp',
     'src/io/io.cpp',
     'src/io/iohandle.cpp',
+    'src/io/nullwriter.cpp',
     'src/io/streamreader.cpp',
     'src/io/streamwriter.cpp',
   ]
