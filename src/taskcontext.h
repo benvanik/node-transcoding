@@ -48,6 +48,8 @@ public:
 
   AVFormatContext*    ictx;
   AVFormatContext*    octx;
+
+  AVBitStreamFilterContext* bitStreamFilter;
 };
 
 }; // transcoding

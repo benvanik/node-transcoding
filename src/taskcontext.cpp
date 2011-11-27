@@ -6,7 +6,7 @@ using namespace transcoding::io;
 TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile) :
     running(false), abort(false), err(0),
     input(input), output(output), profile(profile),
-    ictx(NULL), octx(NULL) {
+    ictx(NULL), octx(NULL), bitStreamFilter(NULL) {
   pthread_mutex_init(&this->lock, NULL);
 }
 
@@ -14,6 +14,10 @@ TaskContext::~TaskContext() {
   assert(!this->running);
 
   pthread_mutex_destroy(&this->lock);
+
+  if (this->bitStreamFilter) {
+    av_bitstream_filter_close(this->bitStreamFilter);
+  }
 
   if (this->ictx) {
     avformat_free_context(this->ictx);
@@ -94,6 +98,26 @@ int TaskContext::Prepare() {
       }
       if (ret) {
         break;
+      }
+    }
+  }
+
+  // Scan video streams to see if we need to set up the bitstream filter for
+  // fixing h264 in mpegts
+  // This is equivalent to the -vbsf h264_mp4toannexb option
+  if (!ret && strcmp(octx->oformat->name, "mpegts") == 0) {
+    for (int n = 0; n < octx->nb_streams; n++) {
+      AVStream* stream = octx->streams[n];
+      if (stream->codec->codec_id == CODEC_ID_H264) {
+        printf("h264 to mpegts, fixup\n");
+        AVBitStreamFilterContext* bsfc =
+            av_bitstream_filter_init("h264_mp4toannexb");
+        if (!bsfc) {
+          ret = AVERROR_BSF_NOT_FOUND;
+        } else {
+          bsfc->next = this->bitStreamFilter;
+          this->bitStreamFilter = bsfc;
+        }
       }
     }
   }
@@ -180,13 +204,13 @@ AVStream* TaskContext::AddOutputStreamCopy(AVFormatContext* octx,
   // Code from avconv, but doesn't seem to work all the time - for now just
   // copy the timebase
   ocodec->time_base               = istream->time_base;
-  //if (av_q2d(icodec->time_base) * icodec->ticks_per_frame >
-  //    av_q2d(istream->time_base) && av_q2d(istream->time_base) < 1 / 1000.0) {
-  //  ocodec->time_base             = icodec->time_base;
-  //  ocodec->time_base.num         *= icodec->ticks_per_frame;
-  //} else {
-  //  ocodec->time_base             = istream->time_base;
-  //}
+  if (av_q2d(icodec->time_base) * icodec->ticks_per_frame >
+     av_q2d(istream->time_base) && av_q2d(istream->time_base) < 1 / 1000.0) {
+   ocodec->time_base             = icodec->time_base;
+   ocodec->time_base.num         *= icodec->ticks_per_frame;
+  } else {
+   ocodec->time_base             = istream->time_base;
+  }
 
   switch (icodec->codec_type) {
   case CODEC_TYPE_VIDEO:
@@ -263,6 +287,29 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
     fprintf(stderr, "Could not duplicate packet\n");
     av_free_packet(&packet);
     *pret = ret;
+    return true;
+  }
+
+  AVBitStreamFilterContext* bsfc = this->bitStreamFilter;
+  while (bsfc) {
+    AVPacket newPacket = packet;
+    ret = av_bitstream_filter_filter(bsfc, stream->codec, NULL,
+        &newPacket.data, &newPacket.size, packet.data, packet.size,
+        packet.flags & AV_PKT_FLAG_KEY);
+    if (ret > 0) {
+       av_free_packet(&packet);
+       newPacket.destruct = av_destruct_packet;
+       ret = 0;
+    } else if (ret < 0) {
+       // Error!
+       break;
+    }
+    packet = newPacket;
+    bsfc = bsfc->next;
+  }
+  if (ret) {
+    *pret = ret;
+    av_free_packet(&packet);
     return true;
   }
 
