@@ -57,6 +57,11 @@ public:
   Persistent<Function>  sourcePause;
   Persistent<Function>  sourceResume;
 
+  Persistent<Function>  onData;
+  Persistent<Function>  onEnd;
+  Persistent<Function>  onClose;
+  Persistent<Function>  onError;
+
   uv_async_t*         asyncReq;
 
   pthread_mutex_t     lock;

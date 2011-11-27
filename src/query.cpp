@@ -46,6 +46,7 @@ Query::Query(Handle<Object> source) :
 
 Query::~Query() {
   TC_LOG_D("Query::~Query()\n");
+  HandleScope scope;
   assert(!this->context);
 
   pthread_mutex_destroy(&this->lock);
@@ -55,8 +56,8 @@ Query::~Query() {
 
 Handle<Value> Query::GetSource(Local<String> property,
     const AccessorInfo& info) {
-  Query* query = ObjectWrap::Unwrap<Query>(info.This());
   HandleScope scope;
+  Query* query = ObjectWrap::Unwrap<Query>(info.This());
   return scope.Close(query->source);
 }
 
@@ -93,8 +94,8 @@ Handle<Value> Query::Start(const Arguments& args) {
 Handle<Value> Query::Stop(const Arguments& args) {
   TC_LOG_D("Query::Stop()\n");
 
-  Query* query = ObjectWrap::Unwrap<Query>(args.This());
   HandleScope scope;
+  Query* query = ObjectWrap::Unwrap<Query>(args.This());
 
   pthread_mutex_lock(&query->lock);
   query->abort = true;
@@ -127,6 +128,7 @@ void Query::EmitError(int err) {
 }
 
 void Query::CompleteAsync(uv_async_t* handle, int status) {
+  HandleScope scope;
   Query* query = static_cast<Query*>(handle->data);
   if (!query) {
     return;

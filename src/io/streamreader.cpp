@@ -28,18 +28,19 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
   // TODO: support seeking?
   this->canSeek = false;
 
-  // Add events to stream
-  // TODO: keep self alive somehow?
-  NODE_ON_EVENT(source, "data", OnData, this);
-  NODE_ON_EVENT(source, "end", OnEnd, this);
-  NODE_ON_EVENT(source, "close", OnClose, this);
-  NODE_ON_EVENT(source, "error", OnError, this);
 
   // Pull out methods we will use frequently
   this->sourcePause = Persistent<Function>::New(
       this->source->Get(String::New("pause")).As<Function>());
   this->sourceResume = Persistent<Function>::New(
       this->source->Get(String::New("resume")).As<Function>());
+
+  // Add events to stream
+  // TODO: keep self alive somehow?
+  NODE_ON_EVENT(source, "data", onData, OnData, this);
+  NODE_ON_EVENT(source, "end", onEnd, OnEnd, this);
+  NODE_ON_EVENT(source, "close", onClose, OnClose, this);
+  NODE_ON_EVENT(source, "error", onError, OnError, this);
 
   // Kick off the stream (some sources need this)
   if (!this->sourceResume.IsEmpty()) {
@@ -77,21 +78,13 @@ int StreamReader::Open() {
 void StreamReader::Close() {
   TC_LOG_D("StreamReader::Close()\n");
   HandleScope scope;
-  Local<Object> global = Context::GetCurrent()->Global();
   Handle<Object> source = this->source;
 
   // Unbind all events
-  // NOTE: this will remove any user ones too, which could be bad...
-  Local<Function> removeAllListeners =
-      Local<Function>::Cast(source->Get(String::New("removeAllListeners")));
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("data") });
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("end") });
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("close") });
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("error") });
+  NODE_REMOVE_EVENT(source, "data", onData);
+  NODE_REMOVE_EVENT(source, "end", onEnd);
+  NODE_REMOVE_EVENT(source, "close", onClose);
+  NODE_REMOVE_EVENT(source, "error", onError);
 
   bool readable = source->Get(String::New("readable"))->IsTrue();
   if (readable) {
@@ -232,8 +225,9 @@ int StreamReader::ReadPacket(void* opaque, uint8_t* buffer, int bufferSize) {
     // Read the next buffer
     ReadBuffer* nextBuffer = stream->buffers.front();
     size_t bytesRead = nextBuffer->Read(buffer, bufferSize);
+    stream->totalBufferredBytes -= bytesRead;
+    assert(stream->totalBufferredBytes >= 0);
     if (nextBuffer->IsEmpty()) {
-      stream->totalBufferredBytes -= nextBuffer->length;
       stream->buffers.erase(stream->buffers.begin());
       delete nextBuffer;
     }

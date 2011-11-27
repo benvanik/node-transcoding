@@ -73,6 +73,7 @@ Task::Task(Handle<Object> source, Handle<Object> target, Handle<Object> profile,
 
 Task::~Task() {
   TC_LOG_D("Task::~Task()\n");
+  HandleScope scope;
   assert(!this->context);
 
   if (this->messages.size()) {
@@ -89,29 +90,29 @@ Task::~Task() {
 
 Handle<Value> Task::GetSource(Local<String> property,
     const AccessorInfo& info) {
-  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   return scope.Close(task->source);
 }
 
 Handle<Value> Task::GetTarget(Local<String> property,
     const AccessorInfo& info) {
-  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   return scope.Close(task->target);
 }
 
 Handle<Value> Task::GetProfile(Local<String> property,
     const AccessorInfo& info) {
-  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   return scope.Close(task->profile);
 }
 
 Handle<Value> Task::GetOptions(Local<String> property,
     const AccessorInfo& info) {
-  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   return scope.Close(task->options);
 }
 
@@ -138,8 +139,8 @@ Handle<Value> Task::GetProgressInternal(Progress* progress) {
 
 Handle<Value> Task::GetProgress(Local<String> property,
     const AccessorInfo& info) {
-  Task* task = ObjectWrap::Unwrap<Task>(info.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(info.This());
 
   if (task->context) {
     return scope.Close(task->GetProgressInternal(&task->progress));
@@ -150,8 +151,8 @@ Handle<Value> Task::GetProgress(Local<String> property,
 
 Handle<Value> Task::Start(const Arguments& args) {
   TC_LOG_D("Task::Start()\n");
-  Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(args.This());
 
   assert(!task->context);
 
@@ -177,8 +178,8 @@ Handle<Value> Task::Start(const Arguments& args) {
 
 Handle<Value> Task::Stop(const Arguments& args) {
   TC_LOG_D("Task::Stop()\n");
-  Task* task = ObjectWrap::Unwrap<Task>(args.This());
   HandleScope scope;
+  Task* task = ObjectWrap::Unwrap<Task>(args.This());
 
   pthread_mutex_lock(&task->lock);
   task->abort = true;
@@ -234,6 +235,7 @@ void Task::EmitEnd() {
 }
 
 void Task::ProcessAsync(uv_async_t* handle, int status) {
+  HandleScope scope;
   assert(status == 0);
   Task* task = static_cast<Task*>(handle->data);
   if (!task) {
