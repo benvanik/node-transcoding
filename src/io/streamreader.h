@@ -14,7 +14,7 @@ namespace transcoding {
 namespace io {
 
 #define STREAMREADER_BUFFER_SIZE  (64 * 1024)
-#define STREAMREADER_MAX_SIZE     (64 * 1024 * 1024)
+#define STREAMREADER_MAX_SIZE     (1 * 1024 * 1024)
 
 class ReadBuffer {
 public:
@@ -62,15 +62,15 @@ public:
   Persistent<Function>  onClose;
   Persistent<Function>  onError;
 
-  uv_async_t*         asyncReq;
+  uv_async_t*           asyncReq;
 
-  pthread_mutex_t     lock;
-  pthread_cond_t      cond;
-  bool                paused;
-  int                 err;
-  bool                eof;
-  int64_t             maxBufferedBytes;
-  int64_t             totalBufferredBytes;
+  pthread_mutex_t       lock;
+  pthread_cond_t        cond;
+  bool                  paused;
+  int                   err;
+  bool                  eof;
+  int64_t               maxBufferedBytes;
+  int64_t               totalBufferredBytes;
   std::vector<ReadBuffer*> buffers;
 };
 

@@ -28,7 +28,6 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
   // TODO: support seeking?
   this->canSeek = false;
 
-
   // Pull out methods we will use frequently
   this->sourcePause = Persistent<Function>::New(
       this->source->Get(String::New("pause")).As<Function>());
@@ -36,7 +35,6 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
       this->source->Get(String::New("resume")).As<Function>());
 
   // Add events to stream
-  // TODO: keep self alive somehow?
   NODE_ON_EVENT(source, "data", onData, OnData, this);
   NODE_ON_EVENT(source, "end", onEnd, OnEnd, this);
   NODE_ON_EVENT(source, "close", onClose, OnClose, this);
