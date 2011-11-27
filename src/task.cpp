@@ -302,6 +302,7 @@ void Task::ProcessAsync(uv_async_t* handle, int status) {
 }
 
 void Task::AsyncHandleClose(uv_handle_t* handle) {
+  TC_LOG_D("Task::AsyncHandleClose()\n");
   delete handle;
 }
 

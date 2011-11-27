@@ -158,6 +158,7 @@ void Query::CompleteAsync(uv_async_t* handle, int status) {
 }
 
 void Query::AsyncHandleClose(uv_handle_t* handle) {
+  TC_LOG_D("Query::AsyncHandleClose()\n");
   delete handle;
 }
 

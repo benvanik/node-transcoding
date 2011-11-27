@@ -54,6 +54,9 @@ private:
 public:
   bool        canSeek;
 
+  Persistent<Function>  sourcePause;
+  Persistent<Function>  sourceResume;
+
   uv_async_t*         asyncReq;
 
   pthread_mutex_t     lock;

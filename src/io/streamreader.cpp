@@ -35,18 +35,27 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
   NODE_ON_EVENT(source, "close", OnClose, this);
   NODE_ON_EVENT(source, "error", OnError, this);
 
+  // Pull out methods we will use frequently
+  this->sourcePause = Persistent<Function>::New(
+      this->source->Get(String::New("pause")).As<Function>());
+  this->sourceResume = Persistent<Function>::New(
+      this->source->Get(String::New("resume")).As<Function>());
+
   // Kick off the stream (some sources need this)
-  Local<Function> resume =
-      Local<Function>::Cast(source->Get(String::New("resume")));
-  if (!resume.IsEmpty()) {
-    resume->Call(source, 0, NULL);
+  if (!this->sourceResume.IsEmpty()) {
+    this->sourceResume->Call(this->source, 0, NULL);
   }
 }
 
 StreamReader::~StreamReader() {
+  HandleScope scope;
+
   TC_LOG_D("StreamReader::~StreamReader()\n");
   pthread_cond_destroy(&this->cond);
   pthread_mutex_destroy(&this->lock);
+
+  this->sourcePause.Dispose();
+  this->sourceResume.Dispose();
 
   uv_close((uv_handle_t*)this->asyncReq, AsyncHandleClose);
 }
@@ -120,8 +129,10 @@ Handle<Value> StreamReader::OnData(const Arguments& args) {
   // Check for max buffer condition
   bool needsPause = false;
   if (stream->totalBufferredBytes > stream->maxBufferedBytes) {
-    needsPause = true;
-    stream->paused = true;
+    if (!stream->sourcePause.IsEmpty()) {
+      needsPause = true;
+      stream->paused = true;
+    }
   }
 
   //printf("OnData: buffer %lld/%lld, paused: %d\n",
@@ -132,11 +143,7 @@ Handle<Value> StreamReader::OnData(const Arguments& args) {
 
   if (needsPause) {
     TC_LOG_D("StreamReader::OnData(): buffer full, pausing\n");
-    Local<Function> pause =
-        Local<Function>::Cast(stream->source->Get(String::New("pause")));
-    if (!pause.IsEmpty()) {
-      pause->Call(stream->source, 0, NULL);
-    }
+    stream->sourcePause->Call(stream->source, 0, NULL);
   }
 
   return scope.Close(Undefined());
@@ -189,19 +196,18 @@ Handle<Value> StreamReader::OnError(const Arguments& args) {
 }
 
 void StreamReader::ResumeAsync(uv_async_t* handle, int status) {
-  TC_LOG_D("StreamReader::ResumeAsync()\n");
   HandleScope scope;
   assert(status == 0);
   StreamReader* stream = static_cast<StreamReader*>(handle->data);
 
-  Local<Function> resume =
-      Local<Function>::Cast(stream->source->Get(String::New("resume")));
-  if (!resume.IsEmpty()) {
-    resume->Call(stream->source, 0, NULL);
+  if (!stream->sourceResume.IsEmpty()) {
+    TC_LOG_D("StreamReader::ResumeAsync()\n");
+    stream->sourceResume->Call(stream->source, 0, NULL);
   }
 }
 
 void StreamReader::AsyncHandleClose(uv_handle_t* handle) {
+  TC_LOG_D("StreamReader::AsyncHandleClose()\n");
   delete handle;
 }
 
