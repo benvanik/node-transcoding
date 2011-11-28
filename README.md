@@ -196,6 +196,9 @@ track events.
 
 ### HTTP Live Streaming
 
+* [IETF Spec](http://tools.ietf.org/html/draft-pantos-http-live-streaming-07)
+* [Apple Docs](http://developer.apple.com/library/ios/#documentation/networkinginternet/conceptual/streamingmediaguide/Introduction/Introduction.html)
+
 If you are targetting devices that support HTTP Live Streaming (like iOS), you
 can have the transcoder build the output in realtime as it processes. This
 enables playback while the transcoding is occuring, as well as some other fancy

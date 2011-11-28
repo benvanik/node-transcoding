@@ -1,5 +1,6 @@
 #include <node.h>
 #include <v8.h>
+#include <fcntl.h>
 #include <string>
 
 extern "C" {

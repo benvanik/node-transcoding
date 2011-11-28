@@ -15,3 +15,7 @@ of the segment generation/writing/etc.
 
 * HLSWriter IOHandle type for streaming info (manifest file, path, etc)
 * Rework TaskContext to either support segmenting or subclass it
+
+// path/name.m3u8
+//     /name.0.ts
+//     /name.1.ts
