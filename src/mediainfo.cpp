@@ -16,6 +16,7 @@ Handle<Object> transcoding::createMediaInfo(AVFormatContext* ctx, bool encoding)
   }
 
   Local<Object> result = Object::New();
+
   result->Set(String::New("container"), String::New(container));
   if (ctx->duration != AV_NOPTS_VALUE) {
     result->Set(String::New("duration"),

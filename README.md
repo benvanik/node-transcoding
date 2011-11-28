@@ -79,7 +79,8 @@ You may also need to add the MacPorts paths to your `~./profile`:
 All APIs take a source and target. Sources can be either strings representing
 file paths or Node readable streams. Targets can be either strings representing
 file paths or Node writable streams. Note that if possible you should use file
-paths, as it enables a much more optimized
+paths, as it enables much faster access to the underlying data (~2x speed
+increase).
 
 ### Media Information
 
