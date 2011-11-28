@@ -11,17 +11,13 @@ using namespace transcoding::io;
 // block. Once the stream object has drained, signalling it's ok to write again,
 // writes will continue.
 
-typedef struct WriterAsyncRequest_t {
-  uv_async_t      req;
-  StreamWriter*   stream;
-  WriteBuffer*    buffer;
-} WriterAsyncRequest;
-
 StreamWriter::StreamWriter(Handle<Object> source, size_t maxBufferedBytes) :
     IOWriter(source),
-    paused(false), err(0), eof(false), closing(false),
-    maxBufferedBytes(maxBufferedBytes), totalBufferredBytes(0),
-    pendingWrites(0) {
+    idle(NULL),
+    kernelBufferFull(false), selfBufferFull(false),
+    err(0), eof(false), closing(false),
+    maxBufferedBytes(maxBufferedBytes), totalBufferredBytes(0) {
+  TC_LOG_D("StreamWriter::StreamWriter()\n");
   HandleScope scope;
 
   pthread_mutex_init(&this->lock, NULL);
@@ -32,21 +28,29 @@ StreamWriter::StreamWriter(Handle<Object> source, size_t maxBufferedBytes) :
 
   // Add events to stream
   // TODO: keep self alive somehow?
-  NODE_ON_EVENT(source, "drain", OnDrain, this);
-  NODE_ON_EVENT(source, "close", OnClose, this);
-  NODE_ON_EVENT(source, "error", OnError, this);
+  NODE_ON_EVENT(source, "drain", onDrain, OnDrain, this);
+  NODE_ON_EVENT(source, "close", onClose, OnClose, this);
+  NODE_ON_EVENT(source, "error", onError, OnError, this);
 }
 
 StreamWriter::~StreamWriter() {
-  printf("~StreamWriter\n");
-  if (this->pendingWrites) {
-    printf("WARNING: StreamWriter dtor when writes pending\n");
+  TC_LOG_D("StreamWriter::~StreamWriter()\n");
+
+  pthread_mutex_lock(&this->lock);
+  if (this->buffers.size()) {
+    TC_LOG_D("StreamWriter::~StreamWriter(): dtor with %d writes pending\n",
+        (int)this->buffers.size());
   }
+  pthread_mutex_unlock(&this->lock);
   pthread_cond_destroy(&this->cond);
   pthread_mutex_destroy(&this->lock);
+
+  // NOTE: do not delete this->idle, it is cleaned up by the handle close stuff
 }
 
 int StreamWriter::Open() {
+  TC_LOG_D("StreamWriter::Open()\n");
+
   int bufferSize = STREAMWRITER_BUFFER_SIZE;
   uint8_t* buffer = (uint8_t*)av_malloc(bufferSize);
   AVIOContext* s = avio_alloc_context(
@@ -56,24 +60,31 @@ int StreamWriter::Open() {
       NULL, WritePacket, this->canSeek ? Seek : NULL);
   s->seekable = 0; // AVIO_SEEKABLE_NORMAL
   this->context = s;
+
+  this->idle = new uv_idle_t();
+  this->idle->data = this;
+  uv_idle_init(uv_default_loop(), this->idle);
+  uv_idle_start(this->idle, IdleCallback);
+
   return 0;
 }
 
 void StreamWriter::Close() {
+  TC_LOG_D("StreamWriter::Close()\n");
   HandleScope scope;
-  Local<Object> global = Context::GetCurrent()->Global();
-  Handle<Object> source = this->source;
+  Local<Object> source = Local<Object>::New(this->source);
+
+  pthread_mutex_lock(&this->lock);
+  if (this->buffers.size()) {
+    TC_LOG_D("StreamWriter::Close(): close when %d writes pending\n",
+        (int)this->buffers.size());
+  }
+  pthread_mutex_unlock(&this->lock);
 
   // Unbind all events
-  // NOTE: this will remove any user ones too, which could be bad...
-  Local<Function> removeAllListeners =
-      Local<Function>::Cast(source->Get(String::New("removeAllListeners")));
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("drain") });
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("close") });
-  removeAllListeners->Call(source,
-      1, (Handle<Value>[]){ String::New("error") });
+  NODE_REMOVE_EVENT(source, "drain", onDrain);
+  NODE_REMOVE_EVENT(source, "close", onClose);
+  NODE_REMOVE_EVENT(source, "error", onError);
 
   bool writable = source->Get(String::New("writable"))->IsTrue();
   if (writable) {
@@ -93,29 +104,38 @@ void StreamWriter::Close() {
   }
   av_free(this->context);
   this->context = NULL;
+
+  // Kill the idle ASAP
+  uv_close((uv_handle_t*)this->idle, IdleHandleClose);
 }
 
 bool StreamWriter::QueueCloseOnIdle() {
+  TC_LOG_D("StreamWriter::QueueCloseOnIdle()\n");
+
   pthread_mutex_lock(&this->lock);
-  int pendingWrites = this->pendingWrites;
+  int pendingWrites = this->buffers.size();
   this->closing = true;
-  printf("pending writes: %d\n", pendingWrites);
+  pthread_cond_signal(&this->cond);
   pthread_mutex_unlock(&this->lock);
   if (!pendingWrites) {
     // Close immediately
-    printf("closing immediately\n");
+    TC_LOG_D("StreamWriter::QueueCloseOnIdle(): closing immediately\n");
     this->Close();
+  } else {
+    TC_LOG_D("StreamWriter::QueueCloseOnIdle(): deferred close, %d pending\n",
+        pendingWrites);
   }
   return pendingWrites > 0;
 }
 
 Handle<Value> StreamWriter::OnDrain(const Arguments& args) {
+  TC_LOG_D("StreamWriter::OnDrain()\n");
   HandleScope scope;
   StreamWriter* stream =
       static_cast<StreamWriter*>(External::Unwrap(args.Data()));
 
   pthread_mutex_lock(&stream->lock);
-  stream->paused = false;
+  stream->kernelBufferFull = false;
   pthread_cond_signal(&stream->cond);
   pthread_mutex_unlock(&stream->lock);
 
@@ -123,6 +143,7 @@ Handle<Value> StreamWriter::OnDrain(const Arguments& args) {
 }
 
 Handle<Value> StreamWriter::OnClose(const Arguments& args) {
+  TC_LOG_D("StreamWriter::OnClose()\n");
   HandleScope scope;
   StreamWriter* stream =
       static_cast<StreamWriter*>(External::Unwrap(args.Data()));
@@ -140,7 +161,8 @@ Handle<Value> StreamWriter::OnError(const Arguments& args) {
   StreamWriter* stream =
       static_cast<StreamWriter*>(External::Unwrap(args.Data()));
 
-  printf("StreamWriter::OnError %s\n", *String::Utf8Value(args[0]->ToString()));
+  TC_LOG_D("StreamWriter::OnError(): %s\n",
+      *String::Utf8Value(args[0]->ToString()));
 
   pthread_mutex_lock(&stream->lock);
   stream->err = AVERROR_IO;
@@ -150,67 +172,107 @@ Handle<Value> StreamWriter::OnError(const Arguments& args) {
   return scope.Close(Undefined());
 }
 
-void StreamWriter::WriteAsync(uv_async_t* handle, int status) {
+void StreamWriterFreeCallback(char *data, void *hint) {
+  uint8_t* ptr = (uint8_t*)data;
+  delete[] ptr;
+}
+
+void StreamWriter::IdleCallback(uv_idle_t* handle, int status) {
   HandleScope scope;
   assert(status == 0);
-  WriterAsyncRequest* req = static_cast<WriterAsyncRequest*>(handle->data);
-  StreamWriter* stream = req->stream;
-  Local<Object> global = Context::GetCurrent()->Global();
+  StreamWriter* stream = static_cast<StreamWriter*>(handle->data);
 
-  // TODO: no-copy buffer (can just steal the data from the WriteBuffer)
-  // TODO: fast buffer
-  // NOTE: this may not be needed (according to node headers)
-  // http://sambro.is-super-awesome.com/2011/03/03/creating-a-proper-buffer-in-a-node-c-addon/
-  int bufferLength = (int)req->buffer->length;
-  Buffer* slowBuffer = Buffer::New((char*)req->buffer->data, bufferLength);
-  delete req->buffer;
-  req->buffer = NULL;
-
-  Handle<Value> ctorArgs[3] = {
-      slowBuffer->handle_,
-      Integer::New(bufferLength),
-      Integer::New(0),
-  };
-  Local<Function> bufferCtor =
-      Local<Function>::Cast(global->Get(String::New("Buffer")));
-  Local<Object> actualBuffer =
-      bufferCtor->NewInstance(countof(ctorArgs), ctorArgs);
-
-  Handle<Value> argv[] = {
-    actualBuffer,
-  };
-
-  Local<Function> write =
-      Local<Function>::Cast(stream->source->Get(String::New("write")));
-  bool bufferDrained =
-      write->Call(stream->source, countof(argv), argv)->IsTrue();
-
-  pthread_mutex_lock(&stream->lock);
-  if (!bufferDrained) {
-    // Buffer now full - wait until drain
-    stream->paused = true;
+  if (stream->kernelBufferFull) {
+    // Don't do anything this tick
+    return;
   }
-  stream->totalBufferredBytes -= bufferLength;
-  stream->pendingWrites--;
-  bool needsDestruction = stream->pendingWrites == 0 && stream->closing;
-  pthread_mutex_unlock(&stream->lock);
+
+  bool needsDestruction = false;
+
+  while (true) {
+    WriteBuffer* buffer = NULL;
+    pthread_mutex_lock(&stream->lock);
+    int remaining = stream->buffers.size();
+    if (remaining) {
+      buffer = stream->buffers.front();
+      stream->buffers.erase(stream->buffers.begin());
+    } else {
+      needsDestruction = stream->closing;
+    }
+    pthread_mutex_unlock(&stream->lock);
+    if (!buffer) {
+      break;
+    }
+
+    TC_LOG_D("StreamWriter::IdleCallback(): write, %d remaining, closing: %d\n",
+        remaining, stream->closing);
+
+    // TODO: coalesce buffers (if 100 buffers waiting, merge?)
+    // Wrap our buffer in the node buffer (pass reference)
+    int bufferLength = (int)buffer->length;
+    Buffer* bufferObj = Buffer::New(
+        (char*)buffer->data, bufferLength, StreamWriterFreeCallback, NULL);
+    Local<Object> bufferLocal = Local<Object>::New(bufferObj->handle_);
+    buffer->Steal();
+    delete buffer;
+
+    Local<Function> write =
+        Local<Function>::Cast(stream->source->Get(String::New("write")));
+    bool bufferDrained =
+        write->Call(stream->source, 1, (Handle<Value>[]){
+          bufferLocal,
+        })->IsTrue();
+
+    pthread_mutex_lock(&stream->lock);
+    if (!stream->kernelBufferFull && !bufferDrained) {
+      // Buffer now full - wait until drain
+      stream->kernelBufferFull = true;
+      TC_LOG_D("StreamWriter::IdleCallback(): kernel buffer full\n");
+    }
+    stream->totalBufferredBytes -= bufferLength;
+
+    // Drain until the buffer has a bit of room
+    bool bufferFull =
+        stream->totalBufferredBytes + STREAMWRITER_BUFFER_SIZE * 4 >=
+        stream->maxBufferedBytes;
+    if (stream->selfBufferFull && !bufferFull) {
+      stream->selfBufferFull = false;
+      TC_LOG_D("StreamWriter::IdleCallback(): self buffer drained\n");
+    }
+
+    pthread_cond_signal(&stream->cond);
+    pthread_mutex_unlock(&stream->lock);
+    if (!bufferDrained) {
+      // Don't consume any more buffers
+      break;
+    }
+
+    // Can get in very bad tight loops with this logic - only write until there
+    // is room enough in the buffer for more writes
+    // Always drain when closing, though!
+    // TODO: when closing, do a nice staggered write sequence through the main
+    // event loop - if there are many pending writes this can block for awhile!
+    // if (bufferFull) {
+    //   printf("buffer full, break\n");
+    //   break;
+    // }
+    break;
+  }
 
   if (needsDestruction) {
-    printf("closing at end of writes: %d\n", stream->pendingWrites);
+    TC_LOG_D("StreamWriter::IdleCallback(): closing at end of writes\n");
     stream->Close();
     delete stream;
   }
-
-  NODE_ASYNC_CLOSE(handle, AsyncHandleClose);
 }
 
-void StreamWriter::AsyncHandleClose(uv_handle_t* handle) {
-  WriterAsyncRequest* req = static_cast<WriterAsyncRequest*>(handle->data);
-  delete req;
-  handle->data = NULL;
+void StreamWriter::IdleHandleClose(uv_handle_t* handle) {
+  TC_LOG_D("StreamWriter::IdleHandleClose()\n");
+  delete handle;
 }
 
 int StreamWriter::WritePacket(void* opaque, uint8_t* buffer, int bufferSize) {
+  TC_LOG_D("StreamWriter::WritePacket(%d)\n", bufferSize);
   StreamWriter* stream = static_cast<StreamWriter*>(opaque);
 
   int ret = 0;
@@ -218,39 +280,44 @@ int StreamWriter::WritePacket(void* opaque, uint8_t* buffer, int bufferSize) {
 
   pthread_mutex_lock(&stream->lock);
 
+  if (!stream->selfBufferFull &&
+      stream->totalBufferredBytes + bufferSize > stream->maxBufferedBytes) {
+    TC_LOG_D("StreamWriter::WritePacket(): self buffer full\n");
+    stream->selfBufferFull = true;
+  }
+
   // Wait until the target is drained
-  while (!stream->err && !stream->eof && stream->paused &&
-      (stream->totalBufferredBytes >= stream->maxBufferedBytes)) {
+  while (!stream->err && !stream->eof &&
+      (stream->kernelBufferFull || stream->selfBufferFull)) {
     pthread_cond_wait(&stream->cond, &stream->lock);
   }
+
+  TC_LOG_D("StreamWriter::WritePacket(): %lld/%lld, eof %d, err %d, kbf %d, sbf %d\n",
+      stream->totalBufferredBytes, stream->maxBufferedBytes,
+      stream->eof, stream->err,
+      stream->kernelBufferFull, stream->selfBufferFull);
 
   if (stream->err) {
     // Stream error
     ret = stream->err;
+    TC_LOG_D("StreamWriter::WritePacket(): stream error (%d)\n", stream->err);
   } else if (stream->totalBufferredBytes < stream->maxBufferedBytes) {
     // Write the next buffer
     WriteBuffer* nextBuffer = new WriteBuffer((uint8_t*)buffer, bufferSize);
+    stream->buffers.push_back(nextBuffer);
     stream->totalBufferredBytes += nextBuffer->length;
-    stream->pendingWrites++;
 
-    WriterAsyncRequest* asyncReq = new WriterAsyncRequest();
-    asyncReq->req.data = asyncReq;
-    asyncReq->stream = stream;
-    asyncReq->buffer = nextBuffer;
-    uv_async_init(uv_default_loop(), &asyncReq->req, WriteAsync);
-    uv_async_send(&asyncReq->req);
+    TC_LOG_D("StreamWriter::WritePacket(): write of %d bytes\n", bufferSize);
 
     ret = bufferSize;
   } else if (stream->eof) {
     // Stream at EOF
+    TC_LOG_D("StreamWriter::WritePacket(): stream eof\n");
     ret = 0; // eof
   } else {
     // Stream in error (or unknown, so return EOF)
+    TC_LOG_D("StreamWriter::WritePacket(): stream UNKNOWN (%d)\n", stream->err);
     ret = stream->err;
-  }
-
-  if (stream->totalBufferredBytes >= stream->maxBufferedBytes) {
-    stream->paused = true;
   }
 
   pthread_mutex_unlock(&stream->lock);
@@ -272,6 +339,13 @@ WriteBuffer::WriteBuffer(uint8_t* source, int64_t length) :
 }
 
 WriteBuffer::~WriteBuffer() {
-  delete[] this->data;
+  if (this->data) {
+    delete[] this->data;
+    this->data = NULL;
+  }
+}
+
+void WriteBuffer::Steal() {
   this->data = NULL;
+  this->length = 0;
 }

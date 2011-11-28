@@ -12,7 +12,8 @@ extern "C" {
 
 namespace transcoding {
 
-#define TC_LOG_DEBUG 1
+// Set to 1 to enable massive debug spew
+#define TC_LOG_DEBUG 0
 
 #if TC_LOG_DEBUG
 #define TC_LOG_D(args...) printf(args)

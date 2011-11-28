@@ -61,13 +61,13 @@ Task::Task(Handle<Object> source, Handle<Value> targetValue,
   if (targetValue.IsEmpty() || targetValue->IsNull()) {
     // Null target
   } else {
-    this->target = Persistent<Object>::New(targetValue.As<Object>());
+    this->target = Persistent<Object>::New(targetValue->ToObject());
   }
   this->profile = Persistent<Object>::New(profile);
   if (optionsValue.IsEmpty() || optionsValue->IsNull()) {
     this->options = Persistent<Object>::New(Object::New());
   } else {
-    this->options = Persistent<Object>::New(optionsValue.As<Object>());
+    this->options = Persistent<Object>::New(optionsValue->ToObject());
   }
 
   memset(&this->progress, 0, sizeof(this->progress));

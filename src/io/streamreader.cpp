@@ -47,9 +47,9 @@ StreamReader::StreamReader(Handle<Object> source, size_t maxBufferedBytes) :
 }
 
 StreamReader::~StreamReader() {
+  TC_LOG_D("StreamReader::~StreamReader()\n");
   HandleScope scope;
 
-  TC_LOG_D("StreamReader::~StreamReader()\n");
   pthread_cond_destroy(&this->cond);
   pthread_mutex_destroy(&this->lock);
 
