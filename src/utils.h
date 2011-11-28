@@ -41,13 +41,9 @@ do {                                                                      \
         External::New(reinterpret_cast<void*>(target))); \
     Local<Function> __cb = __cbt->GetFunction(); \
     __cb->SetName(String::New(name)); \
+    inst = Persistent<Function>::New(__cb); \
     Local<Function> __on = Local<Function>::Cast(obj->Get(String::New("on"))); \
-    inst = Persistent<Function>::New(__on); \
-    Handle<Value> __argv[] = { \
-      String::New(name), \
-      __cb, \
-    }; \
-    __on->Call(obj, countof(__argv), __argv); \
+    __on->Call(obj, 2, (Handle<Value>[]){ String::New(name), __cb }); \
   } while(0)
 
 #define NODE_REMOVE_EVENT(obj, name, inst) \
