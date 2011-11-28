@@ -4,11 +4,14 @@ using namespace std;
 using namespace transcoding;
 using namespace transcoding::hls;
 
+// TODO: use a new protocol version to get floating point numbers for durations
+// v3+ allow them in EXTINF
+
 Playlist::Playlist(string& path, string& name,
     double segmentDuration, bool allowCache) :
     path(path), name(name), segmentDuration(segmentDuration) {
   TC_LOG_D("Playlist::Playlist(%s, %s, %d, %s)\n",
-      path.c_str(), name.c_str(), (int)(duration + 0.5),
+      path.c_str(), name.c_str(), (int)(segmentDuration + 0.5),
       allowCache ? "cache" : "no-cache");
 
   this->playlistFile = this->path + this->name + ".m3u8";
@@ -21,7 +24,7 @@ Playlist::Playlist(string& path, string& name,
       "#EXT-X-TARGETDURATION:%d\n"
       "#EXT-X-MEDIA-SEQUENCE:1\n"
       "#EXT-X-ALLOW-CACHE:%s\n",
-      (int)duration, allowCache ? "YES" : "NO");
+      (int)(segmentDuration + 0.5), allowCache ? "YES" : "NO");
   this->AppendString(str, false);
 }
 
@@ -45,19 +48,40 @@ int Playlist::AppendString(const char* str, bool append) {
      flags |= O_CREAT | O_TRUNC;
   }
 
+  bool opened = false;
   uv_fs_t openReq;
   r = uv_fs_open(uv_default_loop(),
       &openReq, this->playlistFile.c_str(),
       flags, S_IWRITE | S_IREAD, NULL);
+  assert(r == 0);
+  if (!r) {
+    opened = true;
+  }
 
-  uv_fs_t writeReq;
-  r = uv_fs_write(uv_default_loop(),
-      &writeReq, openReq.result,
-      (void*)str, strlen(str), -1, NULL);
+  if (!r) {
+    uv_fs_t writeReq;
+    r = uv_fs_write(uv_default_loop(),
+        &writeReq, openReq.result,
+        (void*)str, strlen(str), -1, NULL);
+    assert(r == 0);
+  }
 
-  uv_fs_t closeReq;
-  r = uv_fs_close(uv_default_loop(),
-      &closeReq, openReq.result, NULL);
+  if (!r) {
+    // NOTE: don't do just an fdatasync, as servers need valid modification
+    // times as well as data
+    // TODO: required? close may already be enough
+    uv_fs_t syncReq;
+    r = uv_fs_fsync(uv_default_loop(),
+        &syncReq, openReq.result, NULL);
+    assert(r == 0);
+  }
+
+  if (opened) {
+    uv_fs_t closeReq;
+    r = uv_fs_close(uv_default_loop(),
+        &closeReq, openReq.result, NULL);
+    assert(r == 0);
+  }
 
   return r;
 }
