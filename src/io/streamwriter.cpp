@@ -252,11 +252,10 @@ void StreamWriter::IdleCallback(uv_idle_t* handle, int status) {
     // Always drain when closing, though!
     // TODO: when closing, do a nice staggered write sequence through the main
     // event loop - if there are many pending writes this can block for awhile!
-    // if (bufferFull) {
-    //   printf("buffer full, break\n");
-    //   break;
-    // }
-    break;
+    if (bufferFull) {
+      TC_LOG_D("StreamWriter::IdleCallback(): self buffer drained, break\n");
+      break;
+    }
   }
 
   if (needsDestruction) {

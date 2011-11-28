@@ -14,7 +14,7 @@ namespace transcoding {
 namespace io {
 
 #define STREAMWRITER_BUFFER_SIZE  (64 * 1024)
-#define STREAMWRITER_MAX_SIZE     (32 * 1024 * 1024)
+#define STREAMWRITER_MAX_SIZE     (1 * 1024 * 1024)
 
 class WriteBuffer {
 public:
