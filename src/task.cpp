@@ -164,11 +164,18 @@ Handle<Value> Task::Start(const Arguments& args) {
 
   assert(!task->context);
 
-  // Setup context
-  IOReader* input = IOReader::Create(task->source);
-  IOWriter* output = IOWriter::Create(task->target);
   Profile* profile = new Profile(task->profile);
   TaskOptions* options = new TaskOptions(task->options);
+  if (options->liveStreaming) {
+    // Must force to MPEGTS container
+    TC_LOG_D("Task::Start(): HTTP Live Streaming enabled, forcing to MPEGTS\n");
+    profile->container = "mpegts";
+  }
+
+  IOReader* input = IOReader::Create(task->source);
+  IOWriter* output = IOWriter::Create(task->target);
+
+  // Setup context
   TaskContext* context = new TaskContext(input, output, profile, options);
 
   // Prepare thread request

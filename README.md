@@ -199,16 +199,21 @@ track events.
 * [IETF Spec](http://tools.ietf.org/html/draft-pantos-http-live-streaming-07)
 * [Apple Docs](http://developer.apple.com/library/ios/#documentation/networkinginternet/conceptual/streamingmediaguide/Introduction/Introduction.html)
 
-If you are targetting devices that support HTTP Live Streaming (like iOS), you
+If you are targeting devices that support HTTP Live Streaming (like iOS), you
 can have the transcoder build the output in realtime as it processes. This
 enables playback while the transcoding is occuring, as well as some other fancy
 things such as client-side stream switching (changing audio channels/etc).
 
-    // TODO: API for this... something like:
-    // (where target is used as a base filename for all the extra stuff)
-    var task = transcoding.createTask(source, target, profile, {
-      streaming: {
+    var task = transcoding.createTask(source, null, profile, {
+      liveStreaming: {
+        path: '/some/path/',
+        name: 'base_name',
         segmentDuration: 10,
         allowCaching: true
       }
     });
+
+This will result in a playlist file and the MPEGTS segments being placed under
+`/some/path/` with the name `base_name.m3u8`. The playlist file will be
+automatically updated as new segments are generated, and files can be assumed to
+be static once they are available.

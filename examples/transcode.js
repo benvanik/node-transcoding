@@ -19,6 +19,14 @@ var opts = require('tav').set({
   stream_output: {
     note: 'Stream file output to test streaming',
     value: false
+  },
+  livestreaming: {
+    note: 'Enable HTTP Live Streaming output',
+    value: false
+  },
+  segmentDuration: {
+    note: 'HTTP Live Streaming segment duration',
+    value: 10
   }
 });
 
@@ -86,6 +94,9 @@ if (inputFile == '-') {
   }
 }
 
+var transcodeOptions = {
+};
+
 var target;
 if (opts.args.length >= 2) {
   var profile = transcoding.profiles[opts['profile']];
@@ -95,7 +106,20 @@ if (opts.args.length >= 2) {
   }
 
   var outputFile = opts.args[1];
-  if (outputFile == '-') {
+  if (opts['livestreaming']) {
+    // Must be a path
+    var outputPath = path.dirname(outputFile);
+    if (!path.existsSync(outputPath)) {
+      fs.mkdirSync(outputPath);
+    }
+    target = null;
+    transcodeOptions.liveStreaming = {
+      path: outputPath,
+      name: path.basename(outputFile),
+      segmentDuration: parseInt(opts['segmentDuration']),
+      allowCaching: true
+    };
+  } else if (outputFile == '-') {
     // STDOUT
     target = process.stdout;
   } else if (outputFile == 'null') {
@@ -132,8 +156,7 @@ function processQuery(source) {
 };
 
 function processTranscode(source, target) {
-  var task = transcoding.createTask(source, target, profile, {
-  });
+  var task = transcoding.createTask(source, target, profile, transcodeOptions);
   task.on('begin', function(sourceInfo, targetInfo) {
     // Transcoding beginning
     console.log('transcoding beginning...');

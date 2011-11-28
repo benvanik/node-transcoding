@@ -11,10 +11,13 @@ using namespace v8;
 
 namespace transcoding {
 
-class StreamingOptions {
+class LiveStreamingOptions {
 public:
-  StreamingOptions(Handle<Object> source);
-  ~StreamingOptions();
+  LiveStreamingOptions(Handle<Object> source);
+  ~LiveStreamingOptions();
+
+  std::string       path;
+  std::string       name;
 
   double            segmentDuration;
   bool              allowCaching;
@@ -25,7 +28,7 @@ public:
   TaskOptions(Handle<Object> source);
   ~TaskOptions();
 
-  StreamingOptions* streaming;
+  LiveStreamingOptions* liveStreaming;
 };
 
 }; // transcoding

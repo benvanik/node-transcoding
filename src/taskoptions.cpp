@@ -2,29 +2,32 @@
 
 using namespace transcoding;
 
-StreamingOptions::StreamingOptions(Handle<Object> source) {
+LiveStreamingOptions::LiveStreamingOptions(Handle<Object> source) {
   HandleScope scope;
+
+  this->path = V8GetString(source, "path", "/tmp/");
+  this->name = V8GetString(source, "name", "video");
 
   this->segmentDuration = V8GetNumber(source, "segmentDuration", 10);
   this->allowCaching = V8GetBoolean(source, "allowCaching", true);
 }
 
-StreamingOptions::~StreamingOptions() {
+LiveStreamingOptions::~LiveStreamingOptions() {
 }
 
 TaskOptions::TaskOptions(Handle<Object> source) :
-    streaming(NULL) {
+    liveStreaming(NULL) {
   HandleScope scope;
 
-  Local<Object> streaming =
-      Local<Object>::Cast(source->Get(String::New("streaming")));
-  if (!streaming.IsEmpty()) {
-    this->streaming = new StreamingOptions(streaming);
+  Local<Object> liveStreaming =
+      Local<Object>::Cast(source->Get(String::New("liveStreaming")));
+  if (!liveStreaming.IsEmpty()) {
+    this->liveStreaming = new LiveStreamingOptions(liveStreaming);
   }
 }
 
 TaskOptions::~TaskOptions() {
-  if (this->streaming) {
-    delete this->streaming;
+  if (this->liveStreaming) {
+    delete this->liveStreaming;
   }
 }

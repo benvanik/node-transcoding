@@ -12,7 +12,7 @@ namespace hls {
 
 class Playlist {
 public:
-  Playlist(std::string path, std::string name, double duration,
+  Playlist(std::string& path, std::string& name, double duration,
       bool allowCache);
   ~Playlist();
 

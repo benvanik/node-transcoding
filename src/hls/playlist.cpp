@@ -4,7 +4,8 @@ using namespace std;
 using namespace transcoding;
 using namespace transcoding::hls;
 
-Playlist::Playlist(string path, string name, double duration, bool allowCache) :
+Playlist::Playlist(string& path, string& name,
+    double duration, bool allowCache) :
     path(path), name(name), duration(duration) {
   TC_LOG_D("Playlist::Playlist(%s, %s, %d, %s)\n",
       path.c_str(), name.c_str(), (int)duration,

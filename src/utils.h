@@ -58,7 +58,7 @@ do {                                                                      \
   } while(0)
 
 static std::string V8GetString(v8::Handle<v8::Object> obj, const char* name,
-    std::string& original) {
+    std::string original) {
   v8::HandleScope scope;
   v8::Local<v8::String> value =
       v8::Local<v8::String>::Cast(obj->Get(v8::String::NewSymbol(name)));
