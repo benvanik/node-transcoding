@@ -5,10 +5,10 @@ using namespace transcoding;
 using namespace transcoding::hls;
 
 Playlist::Playlist(string& path, string& name,
-    double duration, bool allowCache) :
-    path(path), name(name), duration(duration) {
+    double segmentDuration, bool allowCache) :
+    path(path), name(name), segmentDuration(segmentDuration) {
   TC_LOG_D("Playlist::Playlist(%s, %s, %d, %s)\n",
-      path.c_str(), name.c_str(), (int)duration,
+      path.c_str(), name.c_str(), (int)(duration + 0.5),
       allowCache ? "cache" : "no-cache");
 
   this->playlistFile = this->path + this->name + ".m3u8";
@@ -62,12 +62,12 @@ int Playlist::AppendString(const char* str, bool append) {
   return r;
 }
 
-int Playlist::AddSegment(int id) {
+int Playlist::AddSegment(int id, double duration) {
   TC_LOG_D("Playlist::AddSegment(%d)\n", id);
 
   char str[1024];
   sprintf(str, "#EXTINF:%d,\n%s-%d.ts\n",
-      (int)this->duration, this->name.c_str(), id);
+      (int)(duration + 0.5), this->name.c_str(), id);
   return this->AppendString(str);
 }
 

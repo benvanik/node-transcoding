@@ -12,13 +12,13 @@ namespace hls {
 
 class Playlist {
 public:
-  Playlist(std::string& path, std::string& name, double duration,
+  Playlist(std::string& path, std::string& name, double segmentDuration,
       bool allowCache);
   ~Playlist();
 
   std::string GetSegmentPath(int id);
 
-  int AddSegment(int id);
+  int AddSegment(int id, double duration);
   int Complete();
 
 private:
@@ -29,7 +29,7 @@ private:
   std::string       name;
   std::string       playlistFile;
 
-  double            duration;
+  double            segmentDuration;
 };
 
 }; // hls
