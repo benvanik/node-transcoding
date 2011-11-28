@@ -16,6 +16,8 @@ public:
       bool allowCache);
   ~Playlist();
 
+  std::string GetSegmentPath(int id);
+
   int AddSegment(int id);
   int Complete();
 

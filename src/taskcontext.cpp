@@ -3,8 +3,9 @@
 using namespace transcoding;
 using namespace transcoding::io;
 
-TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile) :
-    input(input), output(output), profile(profile),
+TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile,
+    TaskOptions* options) :
+    input(input), output(output), profile(profile), options(options),
     ictx(NULL), octx(NULL), bitStreamFilter(NULL) {
   TC_LOG_D("TaskContext::TaskContext()\n");
 }
@@ -24,6 +25,7 @@ TaskContext::~TaskContext() {
   }
 
   delete this->profile;
+  delete this->options;
 
   IOHandle::CloseWhenDone(this->input);
   IOHandle::CloseWhenDone(this->output);

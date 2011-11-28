@@ -81,6 +81,18 @@ static double V8GetNumber(v8::Handle<v8::Object> obj, const char* name,
   }
 }
 
+static bool V8GetBoolean(v8::Handle<v8::Object> obj, const char* name,
+    bool original) {
+  v8::HandleScope scope;
+  v8::Local<v8::Object> value =
+      v8::Local<v8::Object>::Cast(obj->Get(v8::String::NewSymbol(name)));
+  if (value.IsEmpty()) {
+    return original;
+  } else {
+    return value->IsTrue();
+  }
+}
+
 }; // transcoding
 
 #endif // NODE_TRANSCODING_UTILS

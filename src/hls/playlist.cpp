@@ -28,6 +28,12 @@ Playlist::~Playlist() {
   TC_LOG_D("Playlist::~Playlist()\n");
 }
 
+string Playlist::GetSegmentPath(int id) {
+  char name[64];
+  sprintf(name, "-%d.ts", id);
+  return this->path + this->name + name;
+}
+
 int Playlist::AppendString(const char* str, bool append) {
   int r = 0;
 
@@ -37,6 +43,7 @@ int Playlist::AppendString(const char* str, bool append) {
   } else {
      flags |= O_CREAT | O_TRUNC;
   }
+
   uv_fs_t openReq;
   r = uv_fs_open(uv_default_loop(),
       &openReq, this->playlistFile.c_str(),

@@ -2,6 +2,7 @@
 #include <v8.h>
 #include "utils.h"
 #include "profile.h"
+#include "taskoptions.h"
 #include "io/io.h"
 
 #ifndef NODE_TRANSCODING_TASKCONTEXT
@@ -22,7 +23,8 @@ typedef struct Progress_t {
 
 class TaskContext {
 public:
-  TaskContext(io::IOReader* input, io::IOWriter* output, Profile* profile);
+  TaskContext(io::IOReader* input, io::IOWriter* output, Profile* profile,
+      TaskOptions* options);
   ~TaskContext();
 
   // Occurs exclusively in a worker thread
@@ -36,7 +38,7 @@ public:
   io::IOReader*       input;
   io::IOWriter*       output;
   Profile*            profile;
-  // options
+  TaskOptions*        options;
 
   AVFormatContext*    ictx;
   AVFormatContext*    octx;

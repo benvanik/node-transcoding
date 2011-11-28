@@ -41,6 +41,7 @@ def build(bld):
     'src/querycontext.cpp',
     'src/task.cpp',
     'src/taskcontext.cpp',
+    'src/taskoptions.cpp',
     'src/hls/playlist.cpp',
     'src/io/filereader.cpp',
     'src/io/filewriter.cpp',

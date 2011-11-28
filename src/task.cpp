@@ -168,7 +168,8 @@ Handle<Value> Task::Start(const Arguments& args) {
   IOReader* input = IOReader::Create(task->source);
   IOWriter* output = IOWriter::Create(task->target);
   Profile* profile = new Profile(task->profile);
-  TaskContext* context = new TaskContext(input, output, profile);
+  TaskOptions* options = new TaskOptions(task->options);
+  TaskContext* context = new TaskContext(input, output, profile, options);
 
   // Prepare thread request
   uv_work_t* req = new uv_work_t();
