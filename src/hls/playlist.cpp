@@ -53,7 +53,7 @@ int Playlist::AppendString(const char* str, bool append) {
   r = uv_fs_open(uv_default_loop(),
       &openReq, this->playlistFile.c_str(),
       flags, S_IWRITE | S_IREAD, NULL);
-  assert(r == 0);
+  assert(r != -1);
   if (!r) {
     opened = true;
   }
@@ -63,7 +63,7 @@ int Playlist::AppendString(const char* str, bool append) {
     r = uv_fs_write(uv_default_loop(),
         &writeReq, openReq.result,
         (void*)str, strlen(str), -1, NULL);
-    assert(r == 0);
+    assert(r != -1);
   }
 
   if (!r) {
@@ -73,14 +73,14 @@ int Playlist::AppendString(const char* str, bool append) {
     uv_fs_t syncReq;
     r = uv_fs_fsync(uv_default_loop(),
         &syncReq, openReq.result, NULL);
-    assert(r == 0);
+    assert(r != -1);
   }
 
   if (opened) {
     uv_fs_t closeReq;
     r = uv_fs_close(uv_default_loop(),
         &closeReq, openReq.result, NULL);
-    assert(r == 0);
+    assert(r != -1);
   }
 
   return r;

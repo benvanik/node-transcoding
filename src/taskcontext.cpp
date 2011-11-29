@@ -3,10 +3,10 @@
 using namespace transcoding;
 using namespace transcoding::io;
 
-TaskContext::TaskContext(IOReader* input, IOWriter* output, Profile* profile,
+TaskContext::TaskContext(IOReader* input, Profile* profile,
     TaskOptions* options) :
-    input(input), output(output), profile(profile), options(options),
-    ictx(NULL), octx(NULL), bitStreamFilter(NULL) {
+    input(input), profile(profile), options(options),
+    ictx(NULL), bitStreamFilter(NULL) {
   TC_LOG_D("TaskContext::TaskContext()\n");
 }
 
@@ -20,49 +20,41 @@ TaskContext::~TaskContext() {
   if (this->ictx) {
     avformat_free_context(this->ictx);
   }
-  if (this->octx) {
-    avformat_free_context(this->octx);
-  }
 
   delete this->profile;
   delete this->options;
 
   IOHandle::CloseWhenDone(this->input);
-  IOHandle::CloseWhenDone(this->output);
 }
 
-int TaskContext::Prepare() {
-  TC_LOG_D("TaskContext::Prepare()\n");
+int TaskContext::PrepareInput() {
+  TC_LOG_D("TaskContext::PrepareInput()\n");
   int ret = 0;
 
-  // Grab contexts
-  AVFormatContext* ictx = NULL;
-  AVFormatContext* octx = NULL;
-  if (!ret) {
-    ictx = createInputContext(this->input, &ret);
-    if (ret) {
-      TC_LOG_D("TaskContext::Prepare(): failed createInputContext (%d)\n",
-          ret);
-      if (ictx) {
-        avformat_free_context(ictx);
-      }
-      ictx = octx = NULL;
-    }
+  AVFormatContext* ictx = createInputContext(this->input, &ret);
+  if (ret) {
+    TC_LOG_D("TaskContext::PrepareInput(): failed createInputContext (%d)\n",
+        ret);
   }
+
   if (!ret) {
-    octx = createOutputContext(this->output, &ret);
-    if (ret) {
-      TC_LOG_D("TaskContext::Prepare(): failed createOutputContext (%d)\n",
-          ret);
-      if (ictx) {
-        avformat_free_context(ictx);
-      }
-      if (octx) {
-        avformat_free_context(octx);
-      }
-      ictx = octx = NULL;
+    this->ictx = ictx;
+  } else {
+    if (ictx) {
+      avformat_free_context(ictx);
     }
+    ictx = NULL;
   }
+
+  TC_LOG_D("TaskContext::PrepareInput() = %d\n", ret);
+  return ret;
+}
+
+int TaskContext::PrepareOutput() {
+  TC_LOG_D("TaskContext::PrepareOutput()\n");
+  int ret = 0;
+
+  AVFormatContext* octx = avformat_alloc_context();
 
   // Setup output container
   if (!ret) {
@@ -72,7 +64,7 @@ int TaskContext::Prepare() {
       octx->oformat = ofmt;
     } else {
       ret = AVERROR_NOFMT;
-      TC_LOG_D("TaskContext::Prepare(): oformat %s not found (%d)\n",
+      TC_LOG_D("TaskContext::PrepareOutput(): oformat %s not found (%d)\n",
           profile->container.c_str(), ret);
     }
     octx->duration    = ictx->duration;
@@ -97,7 +89,7 @@ int TaskContext::Prepare() {
         break;
       }
       if (ret) {
-        TC_LOG_D("TaskContext::Prepare(): failed stream add (%d)\n", ret);
+        TC_LOG_D("TaskContext::PrepareOutput(): failed stream add (%d)\n", ret);
         break;
       }
     }
@@ -110,12 +102,13 @@ int TaskContext::Prepare() {
     for (int n = 0; n < octx->nb_streams; n++) {
       AVStream* stream = octx->streams[n];
       if (stream->codec->codec_id == CODEC_ID_H264) {
-        TC_LOG_D("TaskContext::Prepare(): h264_mp4toannexb on stream %d\n", n);
+        TC_LOG_D("TaskContext::PrepareOutput(): h264_mp4toannexb on stream "
+            "%d\n", n);
         AVBitStreamFilterContext* bsfc =
             av_bitstream_filter_init("h264_mp4toannexb");
         if (!bsfc) {
           ret = AVERROR_BSF_NOT_FOUND;
-          TC_LOG_D("TaskContext::Prepare(): h264_mp4toannexb not found\n");
+          TC_LOG_D("TaskContext::PrepareOutput(): h264_mp4toannexb missing\n");
         } else {
           bsfc->next = this->bitStreamFilter;
           this->bitStreamFilter = bsfc;
@@ -124,28 +117,16 @@ int TaskContext::Prepare() {
     }
   }
 
-  // Write header
   if (!ret) {
-    ret = avformat_write_header(octx, NULL);
-    if (ret) {
-      TC_LOG_D("TaskContext::Prepare(): failed write_header (%d)\n", ret);
-    }
-  }
-
-  if (!ret) {
-    this->ictx = ictx;
     this->octx = octx;
   } else {
-    if (ictx) {
-      avformat_free_context(ictx);
-    }
     if (octx) {
       avformat_free_context(octx);
     }
-    ictx = octx = NULL;
+    octx = NULL;
   }
 
-  TC_LOG_D("TaskContext::Prepare() = %d\n", ret);
+  TC_LOG_D("TaskContext::PrepareOutput() = %d\n", ret);
   return ret;
 }
 
@@ -356,4 +337,73 @@ void TaskContext::End() {
 
   av_write_trailer(octx);
   avio_flush(octx->pb);
+}
+
+SingleFileTaskContext::SingleFileTaskContext(io::IOReader* input,
+    io::IOWriter* output, Profile* profile, TaskOptions* options) :
+    TaskContext(input, profile, options),
+    output(output) {
+  TC_LOG_D("SingleFileTaskContext::SingleFileTaskContext()\n");
+}
+
+SingleFileTaskContext::~SingleFileTaskContext() {
+  TC_LOG_D("SingleFileTaskContext::~SingleFileTaskContext()\n");
+
+  if (this->octx) {
+    avformat_free_context(this->octx);
+  }
+  IOHandle::CloseWhenDone(this->output);
+}
+
+int SingleFileTaskContext::PrepareOutput() {
+  TC_LOG_D("SingleFileTaskContext::PrepareOutput()\n");
+
+  int ret = TaskContext::PrepareOutput();
+
+  AVFormatContext* octx = this->octx;
+
+  // Open output
+  if (!ret) {
+    ret = this->output->Open();
+    if (ret) {
+      TC_LOG_D("SingleFileTaskContext::PrepareOutput(): failed open (%d)\n",
+          ret);
+    }
+  }
+  if (!ret) {
+    octx->pb = this->output->context;
+    if (!octx->pb) {
+      ret = AVERROR_NOENT;
+      TC_LOG_D("SingleFileTaskContext::PrepareOutput(): no pb (%d)\n", ret);
+    }
+  }
+
+  // Write header
+  if (!ret) {
+    ret = avformat_write_header(octx, NULL);
+    if (ret) {
+      TC_LOG_D("SingleFileTaskContext::PrepareOutput(): failed write_header "
+          " (%d)\n", ret);
+    }
+  }
+
+  TC_LOG_D("SingleFileTaskContext::PrepareOutput() = %d\n", ret);
+  return ret;
+}
+
+LiveStreamingTaskContext::LiveStreamingTaskContext(
+    io::IOReader* input, Profile* profile, TaskOptions* options) :
+    TaskContext(input, profile, options) {
+  TC_LOG_D("LiveStreamingTaskContext::LiveStreamingTaskContext()\n");
+
+  this->playlist = new hls::Playlist(
+      options->liveStreaming->path, options->liveStreaming->name,
+      options->liveStreaming->segmentDuration,
+      options->liveStreaming->allowCaching);
+}
+
+LiveStreamingTaskContext::~LiveStreamingTaskContext() {
+  TC_LOG_D("LiveStreamingTaskContext::~LiveStreamingTaskContext()\n");
+
+  delete this->playlist;
 }

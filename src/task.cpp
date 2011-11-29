@@ -172,11 +172,17 @@ Handle<Value> Task::Start(const Arguments& args) {
     profile->container = "mpegts";
   }
 
+  // Ready input
   IOReader* input = IOReader::Create(task->source);
-  IOWriter* output = IOWriter::Create(task->target);
 
   // Setup context
-  TaskContext* context = new TaskContext(input, output, profile, options);
+  TaskContext* context = NULL;
+  if (options->liveStreaming) {
+    context = new LiveStreamingTaskContext(input, profile, options);
+  } else {
+    IOWriter* output = IOWriter::Create(task->target);
+    context = new SingleFileTaskContext(input, output, profile, options);
+  }
 
   // Prepare thread request
   uv_work_t* req = new uv_work_t();
@@ -337,7 +343,10 @@ void Task::ThreadWorker(uv_work_t* request) {
   TaskMessage* msg;
 
   // Prepare the input/output (done on the main thread to make things easier)
-  int ret = context->Prepare();
+  int ret = context->PrepareInput();
+  if (!ret) {
+    ret = context->PrepareOutput();
+  }
   if (ret) {
     TC_LOG_D("Task::ThreadWorker(): Prepare failed (%d)\n", ret);
     pthread_mutex_lock(&task->lock);

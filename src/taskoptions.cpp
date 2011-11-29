@@ -21,7 +21,7 @@ TaskOptions::TaskOptions(Handle<Object> source) :
 
   Local<Object> liveStreaming =
       Local<Object>::Cast(source->Get(String::New("liveStreaming")));
-  if (!liveStreaming.IsEmpty()) {
+  if (!liveStreaming.IsEmpty() && liveStreaming->IsObject()) {
     this->liveStreaming = new LiveStreamingOptions(liveStreaming);
   }
 }
