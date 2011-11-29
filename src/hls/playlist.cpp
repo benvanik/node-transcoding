@@ -22,7 +22,7 @@ Playlist::Playlist(string& path, string& name,
       "#EXT-X-VERSION:1\n"
       "#EXT-X-PLAYLIST-TYPE:EVENT\n"
       "#EXT-X-TARGETDURATION:%d\n"
-      "#EXT-X-MEDIA-SEQUENCE:1\n"
+      "#EXT-X-MEDIA-SEQUENCE:0\n"
       "#EXT-X-ALLOW-CACHE:%s\n",
       (int)(segmentDuration + 0.5), allowCache ? "YES" : "NO");
   this->AppendString(str, false);
