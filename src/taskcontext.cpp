@@ -3,15 +3,22 @@
 using namespace transcoding;
 using namespace transcoding::io;
 
+// Number of packets to keep in the FIFO
+#define FIFO_MIN_COUNT 64
+
 TaskContext::TaskContext(IOReader* input, Profile* profile,
     TaskOptions* options) :
     input(input), profile(profile), options(options),
-    ictx(NULL), bitStreamFilter(NULL) {
+    ictx(NULL), bitStreamFilter(NULL), fifo(NULL), doneReading(false) {
   TC_LOG_D("TaskContext::TaskContext()\n");
 }
 
 TaskContext::~TaskContext() {
   TC_LOG_D("TaskContext::~TaskContext()\n");
+
+  if (this->fifo) {
+    delete this->fifo;
+  }
 
   if (this->bitStreamFilter) {
     av_bitstream_filter_close(this->bitStreamFilter);
@@ -70,6 +77,11 @@ int TaskContext::PrepareOutput() {
     octx->duration    = ictx->duration;
     octx->start_time  = ictx->start_time;
     octx->bit_rate    = ictx->bit_rate;
+  }
+
+  // Setup input FIFO
+  if (!ret) {
+    this->fifo = new PacketFifo(ictx->nb_streams);
   }
 
   // Setup streams
@@ -249,21 +261,43 @@ CLEANUP:
   return NULL;
 }
 
-bool TaskContext::Pump(int* pret, Progress* progress) {
-  //TC_LOG_D("TaskContext::Pump()\n");
+bool TaskContext::NextPacket(int* pret, Progress* progress, AVPacket& packet) {
+  TC_LOG_D("TaskContext::NextPacket()\n");
 
   AVFormatContext* ictx = this->ictx;
-  AVFormatContext* octx = this->octx;
 
   int ret = 0;
 
-  AVPacket packet;
-  int done = av_read_frame(ictx, &packet);
-  if (done) {
-    TC_LOG_D("TaskContext::Pump(): done/failed to read frame (%d)\n", ret);
-    *pret = 0;
+  // Read a few packets to fill our queue before we process
+  if (!this->doneReading) {
+    while (this->fifo->GetCount() <= FIFO_MIN_COUNT) {
+      AVPacket readPacket;
+      int done = av_read_frame(ictx, &readPacket);
+      if (done) {
+        TC_LOG_D("TaskContext::NextPacket(): done/failed to read frame (%d)\n",
+            ret);
+        *pret = 0;
+        this->doneReading = true;
+        break;
+      } else {
+        double timestamp = readPacket.pts *
+            (double)ictx->streams[readPacket.stream_index]->time_base.num /
+            (double)ictx->streams[readPacket.stream_index]->time_base.den;
+        this->fifo->QueuePacket(readPacket.stream_index, readPacket, timestamp);
+      }
+    }
+  }
+  if (this->doneReading && !this->fifo->GetCount()) {
     return true;
   }
+
+  // Grab the next packet
+  if (!this->fifo->DequeuePacket(packet)) {
+    return true;
+  }
+  double timestamp = packet.pts *
+      (double)ictx->streams[packet.stream_index]->time_base.num /
+      (double)ictx->streams[packet.stream_index]->time_base.den;
 
   AVStream* stream = ictx->streams[packet.stream_index];
 
@@ -274,7 +308,8 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
 
   ret = av_dup_packet(&packet);
   if (ret) {
-    TC_LOG_D("TaskContext::Pump(): failed to duplicate packet (%d)\n", ret);
+    TC_LOG_D("TaskContext::NextPacket(): failed to duplicate packet (%d)\n",
+        ret);
     av_free_packet(&packet);
     *pret = ret;
     return true;
@@ -298,34 +333,67 @@ bool TaskContext::Pump(int* pret, Progress* progress) {
     bsfc = bsfc->next;
   }
   if (ret) {
-    TC_LOG_D("TaskContext::Pump(): failed to filter packet (%d)\n", ret);
+    TC_LOG_D("TaskContext::NextPacket(): failed to filter packet (%d)\n", ret);
     *pret = ret;
     av_free_packet(&packet);
     return true;
   }
 
+  // Update progress (only on success)
+  if (!ret) {
+    progress->timestamp = timestamp;
+  }
+
+  if (ret) {
+    TC_LOG_D("TaskContext::NextPacket() = %d\n", ret);
+  }
+  *pret = ret;
+  return false;
+}
+
+bool TaskContext::WritePacket(int* pret, AVPacket& packet) {
+  TC_LOG_D("TaskContext::WritePacket()\n");
+
+  AVFormatContext* ictx = this->ictx;
+  AVFormatContext* octx = this->octx;
+
+  int ret = 0;
+
   ret = av_interleaved_write_frame(octx, &packet);
   if (ret < 0) {
-    TC_LOG_D("TaskContext::Pump(): could not write frame of stream (%d)\n",
-        ret);
+    TC_LOG_D("TaskContext::WritePacket(): could not write frame of "
+        "stream (%d)\n", ret);
   } else if (ret > 0) {
-    TC_LOG_D("TaskContext::Pump(): end of stream requested (%d)\n", ret);
+    TC_LOG_D("TaskContext::WritePacket(): end of stream requested (%d)\n", ret);
     av_free_packet(&packet);
     *pret = ret;
+    return true;
+  }
+
+  if (ret) {
+    TC_LOG_D("TaskContext::WritePacket() = %d\n", ret);
+  }
+  *pret = ret;
+  return false;
+}
+
+bool TaskContext::Pump(int* pret, Progress* progress) {
+  TC_LOG_D("TaskContext::Pump()\n");
+
+  AVPacket packet;
+  if (this->NextPacket(pret, progress, packet)) {
+    TC_LOG_D("TaskContext::Pump() = %d\n", *pret);
+    return true;
+  }
+
+  if (this->WritePacket(pret, packet)) {
+    TC_LOG_D("TaskContext::Pump() = %d\n", *pret);
+    av_free_packet(&packet);
     return true;
   }
 
   av_free_packet(&packet);
 
-  // Update progress (only on success)
-  if (!ret) {
-    progress->timestamp = packet.pts / (double)stream->time_base.den;
-  }
-
-  if (ret) {
-    TC_LOG_D("TaskContext::Pump() = %d\n", ret);
-  }
-  *pret = ret;
   return false;
 }
 
@@ -406,4 +474,37 @@ LiveStreamingTaskContext::~LiveStreamingTaskContext() {
   TC_LOG_D("LiveStreamingTaskContext::~LiveStreamingTaskContext()\n");
 
   delete this->playlist;
+}
+
+int LiveStreamingTaskContext::PrepareOutput() {
+  TC_LOG_D("LiveStreamingTaskContext::PrepareOutput()\n");
+
+  int ret = 0;
+
+  if (ret) {
+    TC_LOG_D("LiveStreamingTaskContext::PrepareOutput() = %d\n", ret);
+  }
+  return ret;
+}
+
+bool LiveStreamingTaskContext::Pump(int* pret, Progress* progress) {
+  TC_LOG_D("LiveStreamingTaskContext::Pump()\n");
+
+  AVPacket packet;
+  if (this->NextPacket(pret, progress, packet)) {
+    TC_LOG_D("LiveStreamingTaskContext::Pump() = %d\n", *pret);
+    return true;
+  }
+
+  // TODO: switch segment/etc based on packet timeestamp/duration
+
+  if (this->WritePacket(pret, packet)) {
+    TC_LOG_D("LiveStreamingTaskContext::Pump() = %d\n", *pret);
+    av_free_packet(&packet);
+    return true;
+  }
+
+  av_free_packet(&packet);
+
+  return false;
 }

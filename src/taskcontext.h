@@ -1,6 +1,7 @@
 #include <node.h>
 #include <v8.h>
 #include "utils.h"
+#include "packetfifo.h"
 #include "profile.h"
 #include "taskoptions.h"
 #include "hls/playlist.h"
@@ -33,7 +34,9 @@ public:
   virtual int PrepareOutput();
   AVStream* AddOutputStreamCopy(AVFormatContext* octx, AVStream* istream,
       int* pret);
-  bool Pump(int* pret, Progress* progress);
+  bool NextPacket(int* pret, Progress* progress, AVPacket& packet);
+  bool WritePacket(int* pret, AVPacket& packet);
+  virtual bool Pump(int* pret, Progress* progress);
   void End();
 
 public:
@@ -45,6 +48,9 @@ public:
   AVFormatContext*    octx;
 
   AVBitStreamFilterContext* bitStreamFilter;
+
+  PacketFifo*         fifo;
+  bool                doneReading;
 };
 
 class SingleFileTaskContext : public TaskContext {
@@ -65,8 +71,14 @@ public:
       TaskOptions* options);
   virtual ~LiveStreamingTaskContext();
 
+  virtual int PrepareOutput();
+  virtual bool Pump(int* pret, Progress* progress);
+
 protected:
   hls::Playlist*      playlist;
+
+  int                 segmentId;
+  io::IOWriter*       segmentOutput;
 };
 
 }; // transcoding

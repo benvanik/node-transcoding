@@ -36,6 +36,7 @@ def build(bld):
   t.source = [
     'src/binding.cpp',
     'src/mediainfo.cpp',
+    'src/packetfifo.cpp',
     'src/profile.cpp',
     'src/query.cpp',
     'src/querycontext.cpp',
