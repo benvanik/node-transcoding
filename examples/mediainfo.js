@@ -14,7 +14,7 @@ if (opts.args.length < 1) {
 }
 
 var inputFile = path.normalize(opts.args[0]);
-if (!path.existsSync(inputFile)) {
+if (!fs.existsSync(inputFile)) {
   console.log('input file not found');
   return;
 }
