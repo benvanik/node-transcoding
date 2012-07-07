@@ -82,7 +82,7 @@ if (inputFile == '-') {
 } else {
   // Local file
   inputFile = path.normalize(inputFile);
-  if (!path.existsSync(inputFile)) {
+  if (!fs.existsSync(inputFile)) {
     console.log('input file not found');
     return;
   }
@@ -109,7 +109,7 @@ if (opts.args.length >= 2) {
   if (opts['livestreaming']) {
     // Must be a path
     var outputPath = path.dirname(outputFile);
-    if (!path.existsSync(outputPath)) {
+    if (!fs.existsSync(outputPath)) {
       fs.mkdirSync(outputPath);
     }
     target = null;
@@ -132,7 +132,7 @@ if (opts.args.length >= 2) {
     // Local file
     outputFile = path.normalize(outputFile);
     var outputPath = path.dirname(outputFile);
-    if (!path.existsSync(outputPath)) {
+    if (!fs.existsSync(outputPath)) {
       fs.mkdirSync(outputPath);
     }
     target = outputFile;
